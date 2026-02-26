@@ -20,6 +20,7 @@ celery_app = Celery(
     include=[
         "app.services.scanner_tasks",
         "app.services.corpus_tasks",
+        "app.services.phase3_tasks",
     ]
 )
 
@@ -64,6 +65,9 @@ celery_app.conf.update(
             "task": "app.services.scanner_tasks.health_check",
             "schedule": crontab(minute="*/5"),
         },
+        # ── Phase 3 tasks are triggered MANUALLY via API only ──
+        # Use POST /api/phase3/* endpoints from the UI.
+        # No automatic scheduling to prevent unintended disclosures.
     },
 )
 

@@ -818,9 +818,10 @@ def compute_sla(severity: str) -> datetime:
 #  SCANNER FUNCTIONS
 # ─────────────────────────────────────────────────────────────
 
-def scan_sensitive_files(base_url: str, domain_id, db) -> List[Dict]:
-    findings = []
-    seen = set()  # Deduplication
+def scan_sensitive_files(base_url: str, domain_id, db) -> int:
+    """Probe sensitive paths. Saves each confirmed finding immediately. Returns count saved."""
+    saved = 0
+    seen = set()
 
     for probe in SENSITIVE_PATHS:
         time.sleep(1.0 / settings.SCAN_RATE_LIMIT)
@@ -869,7 +870,20 @@ def scan_sensitive_files(base_url: str, domain_id, db) -> List[Dict]:
         )
 
         logger.warning(f"  ⚠ CONFIRMED [{probe['severity']}]: {probe['type']} at {url}")
-        findings.append({
+
+        # DB dedup — skip if same finding already open
+        existing = db.query(Finding).filter(
+            Finding.domain_id == domain_id,
+            Finding.url == url,
+            Finding.finding_type == probe["type"],
+            Finding.status.notin_(["RESOLVED", "FALSE_POSITIVE"]),
+        ).first()
+        if existing:
+            logger.debug(f"  Duplicate skipped: {probe['type']} at {url}")
+            continue
+
+        # Save immediately — visible in UI right now
+        result = save_finding(db, domain_id, {
             "url": url,
             "entity_type": probe["entity"],
             "finding_type": probe["type"],
@@ -881,12 +895,15 @@ def scan_sensitive_files(base_url: str, domain_id, db) -> List[Dict]:
             "context": full_context,
             "value_hash": None,
         })
+        if result:
+            saved += 1
 
-    return findings
+    return saved
 
 
-def scan_pii_in_content(url: str, content: str) -> List[Dict]:
-    findings = []
+def scan_pii_in_content(url: str, content: str, domain_id=None, db=None) -> int:
+    """Scan page content for PII patterns. Saves immediately if domain_id+db provided. Returns count."""
+    saved = 0
     cl = content.lower()
 
     for rule in PII_PATTERNS:
@@ -932,21 +949,34 @@ def scan_pii_in_content(url: str, content: str) -> List[Dict]:
         )
 
         logger.warning(f"  ⚠ PII: {rule['name']} x{len(matches)} at {url}")
-        findings.append({
-            "url": url,
-            "entity_type": rule["entity"],
-            "finding_type": f"{rule['name']}_IN_CONTENT",
-            "severity": rule["severity"],
-            "confidence": 0.80 if has_kw else 0.60,
-            "value_hash": hash_value(first),
-            "value_count_estimate": len(matches),
-            "http_status": 200,
-            "content_type": "text/html",
-            "file_size": None,
-            "context": full_context,
-        })
 
-    return findings
+        if domain_id and db:
+            # DB dedup
+            existing = db.query(Finding).filter(
+                Finding.domain_id == domain_id,
+                Finding.url == url,
+                Finding.finding_type == f"{rule['name']}_IN_CONTENT",
+                Finding.status.notin_(["RESOLVED", "FALSE_POSITIVE"]),
+            ).first()
+            if existing:
+                continue
+            result = save_finding(db, domain_id, {
+                "url": url,
+                "entity_type": rule["entity"],
+                "finding_type": f"{rule['name']}_IN_CONTENT",
+                "severity": rule["severity"],
+                "confidence": 0.80 if has_kw else 0.60,
+                "value_hash": hash_value(first),
+                "value_count_estimate": len(matches),
+                "http_status": 200,
+                "content_type": "text/html",
+                "file_size": None,
+                "context": full_context,
+            })
+            if result:
+                saved += 1
+
+    return saved
 
 
 # All entity_type values the DB enum accepts. Keep in sync with init.sql.
@@ -1093,26 +1123,14 @@ def scan_domain(self, domain_id: str, job_type: str = "FULL_SCAN"):
             db.commit()
             return {"status": "skipped"}
 
-        # Run scans
-        all_findings = []
-        all_findings += scan_sensitive_files(base_url, domain.id, db)
+        # Run scans — findings saved immediately per-finding so they appear
+        # in the UI as discovered, not waiting until the full task completes.
+        new_count = 0
+        new_count += scan_sensitive_files(base_url, domain.id, db)
 
         home = make_request(base_url)
         if home and home.text:
-            all_findings += scan_pii_in_content(base_url, home.text)
-
-        # Save new (non-duplicate) findings
-        new_count = 0
-        for fd in all_findings:
-            existing = db.query(Finding).filter(
-                Finding.domain_id == domain.id,
-                Finding.url == fd["url"],
-                Finding.finding_type == fd["finding_type"],
-                Finding.status.notin_(["RESOLVED", "FALSE_POSITIVE"])
-            ).first()
-            if not existing:
-                save_finding(db, domain.id, fd)
-                new_count += 1
+            new_count += scan_pii_in_content(base_url, home.text, domain.id, db)
 
         domain.last_scanned_at = datetime.now(timezone.utc)
         domain.scan_count = (domain.scan_count or 0) + 1

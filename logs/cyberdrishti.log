@@ -58,3 +58,25 @@
 2026-02-26 06:34:44 UTC | INFO     | db.database                    | Database connection: OK
 2026-02-26 06:42:13 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
 2026-02-26 06:42:13 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 09:16:07 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 09:16:07 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 10:08:13 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 10:08:13 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 10:14:00 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 10:14:00 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 10:14:48 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 10:14:48 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 11:09:16 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 11:09:20 UTC | ERROR    | db.database                    | Database connection FAILED: (psycopg2.OperationalError) could not translate host name "db" to address: No address associated with hostname
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2026-02-26 16:23:29 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 16:23:29 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 16:34:50 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 16:34:50 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 16:35:13 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 16:35:17 UTC | ERROR    | db.database                    | Database connection FAILED: (psycopg2.OperationalError) could not translate host name "db" to address: No address associated with hostname
+
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2026-02-26 16:39:59 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 16:39:59 UTC | INFO     | db.database                    | Database connection: OK

@@ -151,4 +151,3 @@ In the next phase, we'll add:
 
 *CyberDrishti v1.0 — Phase 0 Foundation*
 *CERT-IN | RESTRICTED | February 2026*
-# CyberDrishti

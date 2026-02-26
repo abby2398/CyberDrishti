@@ -30,11 +30,19 @@ class Settings(BaseSettings):
     SCAN_MAX_RETRIES: int = 3
     SCAN_CONCURRENCY: int = 4
 
-    # External APIs
+    # ── External APIs ─────────────────────────────────────────
+    # Subdomain enumeration (Phase 2)
     SHODAN_API_KEY: Optional[str] = None
     CENSYS_API_ID: Optional[str] = None
     CENSYS_API_SECRET: Optional[str] = None
+    ZOOMEYE_API_KEY: Optional[str] = None
+    SECURITYTRAILS_API_KEY: Optional[str] = None
+    VIRUSTOTAL_API_KEY: Optional[str] = None
+    BINARYEDGE_API_KEY: Optional[str] = None
+    CHAOS_API_KEY: Optional[str] = None
     WHOIS_XML_API_KEY: Optional[str] = None
+
+    # Dark web & breach correlation (Phase 3)
     HIBP_API_KEY: Optional[str] = None
     INTELX_API_KEY: Optional[str] = None
 
@@ -44,6 +52,7 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     DISCLOSURE_FROM_EMAIL: str = "disclosures@cyberdrishti.local"
+    PLATFORM_BASE_URL: str = "http://localhost:8000"
 
     # Logging
     LOG_LEVEL: str = "INFO"

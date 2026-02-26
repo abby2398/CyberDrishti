@@ -192,6 +192,8 @@ tr.clickable{cursor:pointer;}tr.clickable:hover td{background:rgba(0,200,212,.04
     <div class="nav-label">SCANNER</div>
     <div class="nav-item" onclick="triggerCorpus()"><span class="nav-icon">📡</span>Refresh Corpus</div>
     <div class="nav-item" onclick="triggerScanAll()"><span class="nav-icon">🔍</span>Scan Pending</div>
+    <div class="nav-label">DISCLOSURE</div>
+    <div class="nav-item" data-page="phase3" onclick="nav(this)"><span class="nav-icon">📨</span>Phase 3 — Disclose</div>
   </nav>
   <div class="status-dock" id="statusDock">
     <div class="status-row"><div class="dot warn"></div>Checking API...</div>
@@ -249,6 +251,18 @@ tr.clickable{cursor:pointer;}tr.clickable:hover td{background:rgba(0,200,212,.04
         <div id="activityFeed"><div class="loading"><span class="spin"></span></div></div>
       </div>
     </div>
+    <!-- ── Phase 3 widget ── -->
+    <div class="dash-row cols-1" style="margin-bottom:0">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">📨 Disclosure & Escalation Status</div>
+          <button class="btn btn-ghost btn-sm" onclick="nav(document.querySelector('[data-page=phase3]'))">Open Phase 3 →</button>
+        </div>
+        <div id="p3Widget" style="padding:14px">
+          <div class="loading"><span class="spin"></span>Loading...</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ══════════════════════════════════════════════════
@@ -262,6 +276,7 @@ tr.clickable{cursor:pointer;}tr.clickable:hover td{background:rgba(0,200,212,.04
       <select id="domainTLD" onchange="loadDomains()"><option value="">All TLDs</option><option>.gov.in</option><option>.nic.in</option><option>.edu.in</option><option>.ac.in</option><option>.res.in</option></select>
       <select id="domainHasFindings" onchange="loadDomains()"><option value="">Any</option><option value="true">Has Findings</option><option value="false">No Findings</option></select>
       <button class="btn btn-cyan btn-sm" onclick="openAddDomain()">+ Add Domain</button>
+      <button class="btn btn-ghost btn-sm" onclick="reFingerprintAll()" title="Re-fingerprint all domains with missing vendor">🔬 Re-fingerprint Missing</button>
     </div>
     <div class="card">
       <div class="card-head"><div class="card-title">🌐 Domain Corpus</div><div class="card-meta" id="domainMeta"></div></div>
@@ -332,7 +347,143 @@ tr.clickable{cursor:pointer;}tr.clickable:hover td{background:rgba(0,200,212,.04
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════════════
+       PHASE 3 — DISCLOSURE CONTROL CENTRE
+  ══════════════════════════════════════════════════ -->
+  <div class="page" id="page-phase3">
+
+    <!-- ── Alert banner ── -->
+    <div id="p3Alert" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:6px;font-size:12px;font-family:'Space Mono',monospace;"></div>
+
+    <!-- ── Pipeline controls ── -->
+    <div class="dash-row cols-3" style="margin-bottom:14px">
+      <div class="card" style="padding:16px">
+        <div style="font-size:11px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:10px">PIPELINE</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Run Full Phase 3</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Risk scoring → breach correlation → vendor correlation → disclosure → escalation</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-gold" onclick="p3Run('pipeline',true)">🧪 Dry Run</button>
+          <button class="btn btn-red" onclick="p3Confirm('pipeline')">📨 Send Real</button>
+        </div>
+      </div>
+      <div class="card" style="padding:16px">
+        <div style="font-size:11px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:10px">DISCLOSURE</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Send Disclosures</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">CRITICAL findings disclosed immediately. Others when SLA due. .gov.in auto-CC NIC-CERT.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-gold" onclick="p3Run('disclosure',true)">🧪 Dry Run</button>
+          <button class="btn btn-red" onclick="p3Confirm('disclosure')">📨 Send Real</button>
+        </div>
+      </div>
+      <div class="card" style="padding:16px">
+        <div style="font-size:11px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:10px">CERT-IN ESCALATION</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Escalate to CERT-In</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Unacknowledged CRITICAL >72h or dark-web confirmed HIGH+ escalated to incident@cert-in.org.in</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-gold" onclick="p3Run('escalate',true)">🧪 Dry Run</button>
+          <button class="btn btn-red" onclick="p3Confirm('escalate')">🚨 Escalate Real</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-row cols-3" style="margin-bottom:14px">
+      <div class="card" style="padding:16px">
+        <div style="font-size:11px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:10px">RISK SCORES</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Recalculate Risk</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Composite 0-100 score per domain: IOCS + open findings + vendor risk + sector weight</div>
+        <button class="btn btn-cyan" onclick="p3Run('risk-scores',false)">▶ Run Now</button>
+      </div>
+      <div class="card" style="padding:16px">
+        <div style="font-size:11px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:10px">BREACH CORRELATION</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">HIBP + Shodan Check</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Checks HIBP domain breach API and Shodan CVE exposure. Marks findings dark_web_confirmed.</div>
+        <button class="btn btn-cyan" onclick="p3Run('breach-correlation',false)">▶ Run Now</button>
+      </div>
+      <div class="card" style="padding:16px">
+        <div style="font-size:11px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:10px">VENDOR CORRELATION</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Cross-Correlate Vendors</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">If WordPress/Joomla has a CRITICAL, flags all other domains with same CMS automatically.</div>
+        <button class="btn btn-cyan" onclick="p3Run('vendor-correlation',false)">▶ Run Now</button>
+      </div>
+    </div>
+
+    <!-- ── Risk overview table ── -->
+    <div class="dash-row cols-2" style="margin-bottom:14px">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">🎯 Domain Risk Overview</div>
+          <button class="btn btn-ghost btn-sm" onclick="loadRiskOverview()">↻ Refresh</button>
+        </div>
+        <div class="tbl-wrap" id="riskTbl"><div class="empty"><div class="empty-text">Run risk scores to populate.</div></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">📬 Disclosure Log</div>
+          <button class="btn btn-ghost btn-sm" onclick="loadDisclosureLog()">↻ Refresh</button>
+        </div>
+        <div class="tbl-wrap" id="disclosureTbl"><div class="empty"><div class="empty-text">No disclosures yet.</div></div></div>
+        <div id="disclosurePager"></div>
+      </div>
+    </div>
+
+  </div><!-- /page-phase3 -->
+
   </div><!-- /content -->
+</div>
+
+<!-- ═══════════════════════════════════════ SEVERITY MODAL ════ -->
+<div class="modal-bg hidden" id="sevModal" onclick="if(event.target===this)closeModal('sevModal')">
+  <div class="modal" style="max-width:320px">
+    <div class="modal-head">
+      <div class="modal-title">✏ Reclassify Severity</div>
+      <button class="modal-close" onclick="closeModal('sevModal')">✕</button>
+    </div>
+    <div style="padding:16px" id="sevModalBody"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ CONTACT MODAL ═════ -->
+<div class="modal-bg hidden" id="contactModal" onclick="if(event.target===this)closeModal('contactModal')">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <div class="modal-title">✏ Set Security Contact</div>
+      <button class="modal-close" onclick="closeModal('contactModal')">✕</button>
+    </div>
+    <div style="padding:18px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px" id="contactDomainLabel"></div>
+      <div style="margin-bottom:6px;font-size:11px;font-family:'Space Mono',monospace;letter-spacing:1px;color:var(--muted)">SECURITY CONTACT EMAIL</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="contactEmailInput" placeholder="security@domain.gov.in"
+          style="flex:1;background:var(--navy);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:4px;font-family:'Space Mono',monospace;font-size:12px;outline:none;"
+          onkeydown="if(event.key==='Enter')submitContactEmail()">
+        <button class="btn btn-cyan" onclick="submitContactEmail()">Save</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">
+        This email will receive vulnerability disclosure notifications.<br>
+        Common patterns: <code style="color:var(--cyan)">security@</code>, <code style="color:var(--cyan)">abuse@</code>, <code style="color:var(--cyan)">cert@</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ CONFIRM MODAL ════ -->
+<div class="modal-bg hidden" id="confirmModal" onclick="if(event.target===this)closeModal('confirmModal')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <div class="modal-title">⚠ Confirm Real Send</div>
+      <button class="modal-close" onclick="closeModal('confirmModal')">✕</button>
+    </div>
+    <div style="padding:18px">
+      <div style="font-size:13px;margin-bottom:12px" id="confirmMsg"></div>
+      <div style="background:rgba(255,69,69,.08);border:1px solid rgba(255,69,69,.25);border-radius:4px;padding:10px;font-size:11px;color:var(--muted);margin-bottom:16px">
+        ⚠ This will send real emails to organization security contacts. SMTP must be configured. Ensure you have authorization to disclose.
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeModal('confirmModal')">Cancel</button>
+        <button class="btn btn-red" id="confirmOkBtn">Send Real</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════════ FINDING MODAL ═════ -->
@@ -397,7 +548,7 @@ tr.clickable{cursor:pointer;}tr.clickable:hover td{background:rgba(0,200,212,.04
 const API='http://localhost:8000';
 const PER=25;
 let cur='dashboard';
-let pages={domains:1,findings:1,jobs:1,audit:1};
+let pages={domains:1,findings:1,jobs:1,audit:1,phase3:1};
 let dbt={};
 
 // ── Utilities ────────────────────────────────────────────────
@@ -422,7 +573,8 @@ function nav(el){
   document.querySelectorAll('.nav-item[data-page]').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   el.classList.add('active');cur=page;
-  document.getElementById('pageTitle').textContent={dashboard:'Dashboard',domains:'Domain Corpus',findings:'Findings',jobs:'Scan Jobs',audit:'Audit Log'}[page]||page;
+  if(page==='phase3'){loadRiskOverview();loadDisclosureLog();}
+  document.getElementById('pageTitle').textContent={dashboard:'Dashboard',domains:'Domain Corpus',findings:'Findings',jobs:'Scan Jobs',audit:'Audit Log',phase3:'Phase 3 — Disclosure Control'}[page]||page;
   loadPage(page);
 }
 function reload(){loadPage(cur);}
@@ -568,6 +720,8 @@ async function loadDashboard(){
   } else {
     document.getElementById('activityFeed').innerHTML=`<div class="empty" style="padding:20px"><div class="empty-text">No activity yet.</div></div>`;
   }
+  // Phase 3 widget
+  loadP3Widget();
 }
 
 // ══════════════════════════════════════════════════
@@ -590,17 +744,33 @@ async function loadDomains(p){
   document.getElementById('domainMeta').textContent=`${d.total} total`;
   if(!d.domains?.length){document.getElementById('domainsTbl').innerHTML=`<div class="empty"><div class="empty-icon">🌐</div><div class="empty-text">No domains found.</div></div>`;document.getElementById('domainPager').innerHTML='';return;}
   document.getElementById('domainsTbl').innerHTML=`<table>
-    <thead><tr><th>DOMAIN</th><th>TLD</th><th>SECTOR</th><th>IOCS</th><th>STATUS</th><th>IP</th><th>LAST SCAN</th><th>SCANS</th><th>FINDINGS</th><th>ACTIONS</th></tr></thead>
+    <thead><tr><th>DOMAIN</th><th>TLD</th><th>SECTOR</th><th>IOCS</th><th>STATUS</th><th>VENDOR</th><th>IP</th><th>CONTACT</th><th>LAST SCAN</th><th>SCANS</th><th>FINDINGS</th><th>ACTIONS</th></tr></thead>
     <tbody>${d.domains.map(dm=>`<tr class="clickable" onclick="openDomain('${dm.id}')">
       <td style="font-family:'Space Mono',monospace;font-size:11px;color:var(--cyan)">${dm.domain}</td>
       <td>${mono(dm.tld||'—')}</td><td style="font-size:11px">${dm.sector||'—'}</td>
       <td><strong style="color:${dm.iocs_score>=80?'var(--green)':dm.iocs_score>=50?'var(--gold)':'var(--muted)'}">${dm.iocs_score}</strong></td>
       <td>${badge(dm.status||'PENDING')}</td>
+      <td onclick="event.stopPropagation()" title="${dm.vendor_fingerprint||''}">${dm.vendor_fingerprint
+        ? `<span style="font-size:10px;font-family:'Space Mono',monospace;color:${
+            dm.vendor_fingerprint.toLowerCase().includes('wordpress')||dm.vendor_fingerprint.toLowerCase().includes('joomla')?'var(--saffron)':
+            dm.vendor_fingerprint.toLowerCase().includes('drupal')||dm.vendor_fingerprint.toLowerCase().includes('struts')||dm.vendor_fingerprint.toLowerCase().includes('magento')?'var(--gold)':
+            'var(--muted)'}">${dm.vendor_fingerprint}</span>`
+        : `<button class="btn btn-ghost btn-sm" style="font-size:9px" onclick="reFingerprintOne('${dm.id}','${dm.domain}')">🔬</button>`
+      }</td>
       <td>${mono(dm.ip_address||'—')}</td>
+      <td onclick="event.stopPropagation()">${dm.contact_email
+        ? `<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--green)">${dm.contact_email}</span>`
+        : `<button class="btn btn-ghost btn-sm" data-did="${dm.id}" data-dname="${dm.domain}" data-email="" onclick="openContactEditFromBtn(this)">+ Set Email</button>`
+      }</td>
       <td>${mono(fmtD(dm.last_scanned_at))}</td>
       <td style="text-align:center">${dm.scan_count||0}</td>
       <td style="font-weight:700;color:${dm.findings_count>0?'var(--saffron)':'var(--muted)'}">${dm.findings_count}</td>
-      <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="scanDomainById('${dm.id}','${dm.domain}')">▶ Scan</button></td>
+      <td onclick="event.stopPropagation()">
+        <div style="display:flex;gap:4px;align-items:center">
+          <button class="btn btn-ghost btn-sm" onclick="scanDomainById('${dm.id}','${dm.domain}')">▶ Scan</button>
+          <button class="btn btn-red btn-sm" onclick="deleteDomain('${dm.id}','${dm.domain}')" title="Delete domain">🗑</button>
+        </div>
+      </td>
     </tr>`).join('')}</tbody></table>`;
   buildPager('domainPager',pages.domains,d.total,PER,'loadDomains');
 }
@@ -622,6 +792,14 @@ async function openDomain(id){
     <div class="dbox"><div class="dlabel">IP ADDRESS</div><div class="dval">${d.ip_address||'Unknown'}</div></div>
     <div class="dbox"><div class="dlabel">HOSTING / ASN</div><div class="dval">${d.hosting_provider||'—'}${d.asn?`<br>${mono(d.asn)}`:''}</div></div>
     <div class="dbox"><div class="dlabel">DISCOVERED VIA</div><div class="dval">${d.discovered_via||'—'}</div></div>
+    <div class="dbox"><div class="dlabel">VENDOR / CMS</div><div class="dval" style="display:flex;align-items:center;gap:6px">
+      <span style="font-family:'Space Mono',monospace;font-size:11px;color:${d.vendor_fingerprint?'var(--saffron)':'var(--muted)'}">${d.vendor_fingerprint||'Not detected'}</span>
+      <button class="btn btn-ghost btn-sm" onclick="reFingerprintOne('${d.id}','${d.domain}')" title="Re-detect vendor">🔬</button>
+    </div></div>
+    <div class="dbox"><div class="dlabel">SECURITY CONTACT</div><div class="dval" style="display:flex;align-items:center;gap:6px">
+      <span style="font-family:'Space Mono',monospace;font-size:11px;color:${d.contact_email?'var(--green)':'var(--muted)'}">${d.contact_email||'Not set'}</span>
+      <button class="btn btn-ghost btn-sm" data-did="${d.id}" data-dname="${d.domain}" data-email="${d.contact_email||''}" onclick="openContactEditFromBtn(this)">✏ Edit</button>
+    </div></div>
     <div class="dbox"><div class="dlabel">SCAN COUNT</div><div class="dval">${d.scan_count||0}</div></div>
     <div class="dbox"><div class="dlabel">LAST SCANNED</div><div class="dval" style="font-size:11px">${fmtD(d.last_scanned_at)}</div></div>
     <div class="dbox"><div class="dlabel">NEXT SCAN DUE</div><div class="dval" style="font-size:11px">${fmtD(d.next_scan_due_at)}</div></div>
@@ -746,14 +924,60 @@ async function openFinding(id){
     ${f.false_positive_reason?`<div class="dbox span2"><div class="dlabel">FP REASON</div><div class="dval" style="color:var(--muted)">${f.false_positive_reason}</div></div>`:''}`;
   document.getElementById('fmPoc').textContent=f.poc_evidence||'(No evidence captured — re-scan to collect)';
   const open=!['RESOLVED','FALSE_POSITIVE'].includes(f.status);
+  const sevColors={CRITICAL:'var(--red)',HIGH:'var(--saffron)',MEDIUM:'var(--gold)',LOW:'var(--green)',INFO:'var(--muted)'};
+
   document.getElementById('fmActions').innerHTML=`
-    ${open?`<button class="btn btn-green btn-sm" onclick="updateStatus('${id}','CONFIRMED')">✓ Confirm</button>`:''}
+    ${open ? `
+    <div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:rgba(0,212,138,.07);border:1px solid rgba(0,212,138,.25);border-radius:5px;flex-wrap:wrap;">
+      <span style="font-size:10px;font-family:'Space Mono',monospace;color:var(--muted);letter-spacing:1px">CONFIRM AS:</span>
+      <select id="fmSevPick" style="background:var(--navy2);border:1px solid var(--border);color:${sevColors[f.severity]||'var(--text)'};padding:4px 8px;border-radius:3px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer">
+        <option value="" disabled>— severity —</option>
+        <option value="CRITICAL" ${f.severity==='CRITICAL'?'selected':''}>🔴 CRITICAL</option>
+        <option value="HIGH"     ${f.severity==='HIGH'?'selected':''}>🟠 HIGH</option>
+        <option value="MEDIUM"   ${f.severity==='MEDIUM'?'selected':''}>🟡 MEDIUM</option>
+        <option value="LOW"      ${f.severity==='LOW'?'selected':''}>🟢 LOW</option>
+        <option value="INFO"     ${f.severity==='INFO'?'selected':''}>⚪ INFO</option>
+      </select>
+      <button class="btn btn-green btn-sm" onclick="confirmWithSeverity('${id}')">✓ Confirm</button>
+      <button class="btn btn-ghost btn-sm" onclick="promptFP('${id}')">✗ False Positive</button>
+    </div>` : ''}
     ${f.status==='CONFIRMED'?`<button class="btn btn-gold btn-sm" onclick="updateStatus('${id}','ESCALATED')">⬆ Escalate</button>`:''}
-    ${open?`<button class="btn btn-ghost btn-sm" onclick="promptFP('${id}')">✗ False Positive</button>`:''}
     ${['CONFIRMED','ESCALATED'].includes(f.status)?`<button class="btn btn-ghost btn-sm" onclick="updateStatus('${id}','RESOLVED')">✓ Resolved</button>`:''}
+    <button class="btn btn-ghost btn-sm" onclick="changeSeverityOnly('${id}','${f.severity}')">✏ Reclassify</button>
     <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${f.url}').then(()=>toast('URL copied','success'))">📋 URL</button>
     <a href="${f.url}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">🔗 Open</a>
     <button class="btn btn-ghost btn-sm" onclick="closeModal('findingModal');openDomain('${f.domain_id}')">🌐 Domain</button>`;
+}
+
+async function confirmWithSeverity(id){
+  const pick = document.getElementById('fmSevPick');
+  const sev = pick ? pick.value : null;
+  let url = `/api/findings/${id}/status?new_status=CONFIRMED&analyst=ANALYST`;
+  if(sev) url += `&new_severity=${sev}`;
+  const r = await apiPatch(url);
+  if(r){
+    toast(`✓ Confirmed${sev?' as '+sev:''}`, 'success');
+    openFinding(id);
+    if(cur==='findings')loadFindings();
+    if(cur==='dashboard')loadDashboard();
+  } else toast('Update failed','error');
+}
+
+function changeSeverityOnly(id, currentSev){
+  const sevs = ['CRITICAL','HIGH','MEDIUM','LOW','INFO'];
+  const html = `<div style="display:flex;flex-direction:column;gap:6px">
+    ${sevs.map(s=>`<button class="btn ${s===currentSev?'btn-cyan':'btn-ghost'} btn-sm" style="text-align:left;justify-content:flex-start"
+      onclick="reclassify('${id}','${s}');closeModal('sevModal')">${{CRITICAL:'🔴',HIGH:'🟠',MEDIUM:'🟡',LOW:'🟢',INFO:'⚪'}[s]} ${s}${s===currentSev?' (current)':''}</button>`).join('')}
+  </div>`;
+  document.getElementById('sevModalBody').innerHTML = html;
+  document.getElementById('sevModal').classList.remove('hidden');
+}
+
+async function reclassify(id, newSev){
+  // Keep current status, just change severity
+  const r = await apiPatch(`/api/findings/${id}/status?new_status=CONFIRMED&new_severity=${newSev}&analyst=ANALYST`);
+  if(r){ toast(`Reclassified → ${newSev}`,'success'); openFinding(id); if(cur==='findings')loadFindings(); }
+  else toast('Failed','error');
 }
 
 async function updateStatus(id,status){
@@ -863,6 +1087,208 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')['findingModal','dom
 
 // Init
 loadDashboard();
+
+// ══════════════════════════════════════════════════
+// PHASE 3 — DISCLOSURE CONTROL
+// ══════════════════════════════════════════════════
+let p3CurrentAction = null;
+
+function p3Show(msg, type='info'){
+  const el=document.getElementById('p3Alert');
+  if(!el)return;
+  const colors={info:'rgba(0,200,212,.15)',success:'rgba(0,212,138,.15)',error:'rgba(255,69,69,.15)',warn:'rgba(255,193,7,.15)'};
+  const borders={info:'rgba(0,200,212,.4)',success:'rgba(0,212,138,.4)',error:'rgba(255,69,69,.4)',warn:'rgba(255,193,7,.4)'};
+  el.style.display='block';
+  el.style.background=colors[type]||colors.info;
+  el.style.border=`1px solid ${borders[type]||borders.info}`;
+  el.style.color='var(--text)';
+  el.textContent=msg;
+}
+
+async function p3Run(action, dryRun){
+  const map={
+    'pipeline':           '/api/phase3/pipeline',
+    'disclosure':         '/api/phase3/disclosure',
+    'escalate':           '/api/phase3/escalate',
+    'risk-scores':        '/api/phase3/risk-scores',
+    'breach-correlation': '/api/phase3/breach-correlation',
+    'vendor-correlation': '/api/phase3/vendor-correlation',
+  };
+  const url = map[action] + (dryRun !== false && action !== 'risk-scores' ? '?dry_run=true' : '');
+  p3Show(`Running ${action}${dryRun?` (dry run)`:''}...`,'info');
+  const r = await apiPost(url);
+  if(r){
+    p3Show(`✓ ${action} queued (task_id: ${r.task_id||'—'}) ${dryRun?'— check worker logs for dry-run output':''}`, 'success');
+    setTimeout(()=>{loadRiskOverview();loadDisclosureLog();}, 2000);
+  } else {
+    p3Show(`✗ ${action} failed — check API`, 'error');
+  }
+}
+
+function p3Confirm(action){
+  p3CurrentAction = action;
+  const names = {
+    'pipeline':'Full Phase 3 Pipeline',
+    'disclosure':'Disclosure Workflow',
+    'escalate':'CERT-In Escalation',
+  };
+  document.getElementById('confirmMsg').textContent = `Send real emails via ${names[action]||action}?`;
+  document.getElementById('confirmOkBtn').onclick = () => {
+    closeModal('confirmModal');
+    p3Run(p3CurrentAction, false);
+  };
+  document.getElementById('confirmModal').classList.remove('hidden');
+}
+
+async function loadRiskOverview(){
+  const el=document.getElementById('riskTbl');
+  if(!el)return;
+  el.innerHTML=`<div class="loading"><span class="spin"></span>Loading...</div>`;
+  const d=await apiFetch('/api/phase3/risk-overview');
+  if(!d||!d.domains?.length){
+    el.innerHTML=`<div class="empty"><div class="empty-text">No risk scores yet. Run "Recalculate Risk" first.</div></div>`;
+    return;
+  }
+  el.innerHTML=`<table>
+    <thead><tr><th>DOMAIN</th><th>SECTOR</th><th>RISK</th><th>CRIT</th><th>HIGH</th><th>🌑 DW</th><th>⚠ SLA</th><th>VENDOR</th></tr></thead>
+    <tbody>${d.domains.slice(0,50).map(r=>`<tr>
+      <td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--cyan)">${r.domain}</td>
+      <td style="font-size:10px">${r.sector||'—'}</td>
+      <td><span style="font-weight:800;color:${r.risk_score>=80?'var(--red)':r.risk_score>=50?'var(--gold)':'var(--green)'}">${r.risk_score}</span></td>
+      <td style="font-weight:700;color:${r.open_critical>0?'var(--red)':'var(--muted)'}">${r.open_critical||0}</td>
+      <td style="font-weight:700;color:${r.open_high>0?'var(--saffron)':'var(--muted)'}">${r.open_high||0}</td>
+      <td style="color:${r.dark_web_hits>0?'var(--purple)':'var(--muted)'}">${r.dark_web_hits||0}</td>
+      <td style="color:${r.sla_breached>0?'var(--red)':'var(--muted)'}">${r.sla_breached||0}</td>
+      <td style="font-size:10px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.vendor||'—'}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+let disclosurePages = 1;
+async function loadDisclosureLog(p){
+  if(p!==undefined)disclosurePages=p;
+  const el=document.getElementById('disclosureTbl');
+  if(!el)return;
+  el.innerHTML=`<div class="loading"><span class="spin"></span>Loading...</div>`;
+  const d=await apiFetch(`/api/phase3/disclosures?page=${disclosurePages}&per_page=20`);
+  if(!d||!d.disclosures?.length){
+    el.innerHTML=`<div class="empty"><div class="empty-text">No disclosures sent yet.</div></div>`;
+    document.getElementById('disclosurePager').innerHTML='';
+    return;
+  }
+  el.innerHTML=`<table>
+    <thead><tr><th>RECIPIENT</th><th>TYPE</th><th>STATUS</th><th>SUBJECT</th><th>SENT</th></tr></thead>
+    <tbody>${d.disclosures.map(e=>`<tr>
+      <td style="font-family:'Space Mono',monospace;font-size:10px">${e.recipient_email}</td>
+      <td>${badge(e.recipient_type||'PRIMARY')}</td>
+      <td>${badge(e.send_status||'PENDING')}</td>
+      <td style="font-size:10px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.subject||''}">${e.subject||'—'}</td>
+      <td>${mono(fmtD(e.sent_at))}</td>
+    </tr>`).join('')}</tbody></table>`;
+  buildPager('disclosurePager',disclosurePages,d.total,20,'loadDisclosureLog');
+}
+
+// ── Contact email editing ──────────────────────────────────
+
+let _contactDomainId = null;
+
+function openContactEdit(domainId, domainName, existingEmail=''){
+  _contactDomainId = domainId;
+  document.getElementById('contactDomainLabel').textContent = `Domain: ${domainName}`;
+  const inp = document.getElementById('contactEmailInput');
+  inp.value = existingEmail || '';
+  document.getElementById('contactModal').classList.remove('hidden');
+  setTimeout(()=>{ inp.focus(); if(existingEmail) inp.select(); }, 120);
+}
+
+function openContactEditFromBtn(btn){
+  openContactEdit(btn.dataset.did, btn.dataset.dname, btn.dataset.email || '');
+}
+
+async function submitContactEmail(){
+  const email = document.getElementById('contactEmailInput').value.trim();
+  if(!email){ toast('Enter an email address','warn'); return; }
+  if(!email.includes('@')){ toast('Invalid email address','warn'); return; }
+  try {
+    const r = await fetch(API+`/api/domains/${_contactDomainId}/contact?email=${encodeURIComponent(email)}`,{method:'PATCH'});
+    const data = await r.json();
+    if(r.ok){
+      toast(`Contact saved: ${email}`,'success');
+      closeModal('contactModal');
+      loadDomains();
+    } else {
+      toast(data.detail||'Failed to save email','error');
+    }
+  } catch(e) {
+    toast('Network error — check API is running','error');
+  }
+}
+
+// security.txt auto-discover removed from UI — manual entry only
+
+
+// ── Vendor re-fingerprinting ──────────────────────────────
+async function reFingerprintAll(){
+  toast('Queuing re-fingerprint for domains with no vendor...','info');
+  const r = await apiPost('/api/domains/re-fingerprint-all');
+  if(r) toast(`Queued ${r.queued} domains for re-fingerprinting`,'success');
+  else toast('Failed','error');
+}
+
+async function reFingerprintOne(id, name){
+  toast(`Re-fingerprinting ${name}...`,'info');
+  const r = await apiPost(`/api/domains/${id}/re-fingerprint`);
+  if(r){ toast(`Queued — check back in a few seconds`,'success'); setTimeout(loadDomains, 3000); }
+  else toast('Failed','error');
+}
+
+
+// ── Domain delete ─────────────────────────────────────────────
+async function deleteDomain(id, name){
+  if(!confirm(`Delete domain "${name}" and ALL its findings?\n\nThis cannot be undone.`)) return;
+  try {
+    const r = await fetch(API+`/api/domains/${id}`, {method:'DELETE'});
+    const data = await r.json();
+    if(r.ok){
+      toast(`Deleted: ${name}`,'success');
+      loadDomains();
+    } else {
+      toast(data.detail||'Delete failed','error');
+    }
+  } catch(e) {
+    toast('Network error','error');
+  }
+}
+
+// ── Phase 3 dashboard widget ───────────────────────────────────
+async function loadP3Widget(){
+  const el = document.getElementById('p3Widget');
+  if(!el) return;
+  const d = await apiFetch('/api/phase3/summary');
+  if(!d){ el.innerHTML='<div style="font-size:11px;color:var(--muted)">Phase 3 data unavailable</div>'; return; }
+
+  const items = [
+    {label:'Awaiting Disclosure', val:d.awaiting_disclosure, color:d.awaiting_disclosure>0?'var(--saffron)':'var(--green)', icon:'📬', sub:'CRITICAL immediate + SLA due within 24h'},
+    {label:'Escalation Pending', val:d.escalation_pending, color:d.escalation_pending>0?'var(--red)':'var(--green)', icon:'🚨', sub:'CRITICAL unacknowledged >72h'},
+    {label:'No Contact Email', val:d.no_contact_email, color:d.no_contact_email>0?'var(--gold)':'var(--green)', icon:'📭', sub:'Active domains without security contact'},
+    {label:'Disclosed Total', val:d.disclosed_total, color:'var(--cyan)', icon:'✅', sub:'All-time disclosures sent'},
+    {label:'Acknowledged', val:d.acknowledged, color:'var(--green)', icon:'🤝', sub:'Orgs that clicked ack link'},
+  ];
+
+  el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
+    ${items.map(i=>`
+      <div style="background:var(--navy2);border:1px solid var(--border);border-radius:6px;padding:12px">
+        <div style="font-size:10px;font-family:'Space Mono',monospace;letter-spacing:1px;color:var(--muted);margin-bottom:4px">${i.icon} ${i.label}</div>
+        <div style="font-size:24px;font-weight:800;color:${i.color}">${i.val}</div>
+        <div style="font-size:9px;color:var(--muted);margin-top:3px">${i.sub}</div>
+      </div>`).join('')}
+  </div>
+  ${d.awaiting_disclosure>0||d.escalation_pending>0?`
+  <div style="margin-top:10px;padding:8px 12px;background:rgba(255,69,69,.08);border:1px solid rgba(255,69,69,.25);border-radius:4px;font-size:11px;display:flex;align-items:center;justify-content:space-between">
+    <span>${d.escalation_pending>0?'🚨 Escalation required':'⚠ Disclosures pending'} — run Phase 3 workflow</span>
+    <button class="btn btn-ghost btn-sm" onclick="nav(document.querySelector('[data-page=phase3]'))">Open →</button>
+  </div>`:''}`; 
+}
+
 </script>
 </body>
 </html>

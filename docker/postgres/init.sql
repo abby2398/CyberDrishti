@@ -70,6 +70,8 @@ CREATE TABLE domains (
     -- Metadata
     discovered_via      VARCHAR(50),             -- 'CT_LOG', 'SHODAN', 'REGISTRY', etc.
     sector              VARCHAR(50),             -- 'GOVERNMENT', 'EDUCATION', 'HEALTHCARE', etc.
+    vendor_fingerprint  VARCHAR(200),            -- CMS/framework: 'WordPress 6.4.2', 'Joomla', etc.
+    contact_email       VARCHAR(255),            -- Security contact email (security.txt or manual)
     notes               TEXT,
 
     created_at          TIMESTAMPTZ DEFAULT NOW(),
@@ -209,10 +211,13 @@ CREATE TABLE disclosure_events (
     sent_at         TIMESTAMPTZ,
     send_status     VARCHAR(20),    -- 'SENT', 'FAILED', 'PENDING'
     error_message   TEXT,
+    ack_token       VARCHAR(64) UNIQUE,       -- random token for acknowledgement link
+    acknowledged_at TIMESTAMPTZ,              -- set when org clicks the ack link
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_disclosure_finding ON disclosure_events(finding_id);
+CREATE INDEX idx_disclosure_ack_token ON disclosure_events(ack_token);
 
 -- ─────────────────────────────────────────────────────────────
 --  VIEW: dashboard_summary

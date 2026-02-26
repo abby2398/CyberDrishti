@@ -3,20 +3,26 @@ from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func, desc, or_, cast, String
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from fastapi.responses import HTMLResponse
 from typing import Optional
 import uuid
 
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.db.database import get_db, check_db_connection
-from app.models.models import Domain, Finding, ScanJob, AuditLog
+from app.models.models import Domain, Finding, ScanJob, AuditLog, DisclosureEvent
 from app.services.corpus_tasks import (
     run_pilot_corpus_refresh, run_corpus_refresh_phase2,
     queue_domains_for_rescan, enrich_domain_fingerprint,
-    add_single_domain,
+    enumerate_domain_subdomains, add_single_domain,
 )
 from app.services.scanner_tasks import scan_domain, scan_all_pending
+from app.services.phase3_tasks import (
+    run_phase3_pipeline, update_risk_scores,
+    run_breach_correlation, run_disclosure_workflow,
+    run_certin_escalation, run_vendor_correlation,
+)
 
 setup_logging(settings.LOG_LEVEL, settings.LOG_FILE)
 logger = get_logger("api.main")
@@ -186,6 +192,8 @@ def list_domains(
             "hosting_provider": d.hosting_provider,
             "asn": d.asn,
             "discovered_via": d.discovered_via,
+            "vendor_fingerprint": d.vendor_fingerprint,
+            "contact_email": d.contact_email,
             "last_scanned_at": d.last_scanned_at.isoformat() if d.last_scanned_at else None,
             "next_scan_due_at": d.next_scan_due_at.isoformat() if d.next_scan_due_at else None,
             "scan_count": d.scan_count,
@@ -201,6 +209,27 @@ def list_domains(
         })
 
     return {"total": total, "page": page, "per_page": per_page, "domains": result}
+
+
+@app.post("/api/domains/add", tags=["Domains"])
+def add_domain(domain: str, db: Session = Depends(get_db)):
+    """Manually add a domain to the corpus. Queues IOCS scoring and fingerprinting."""
+    domain = domain.strip().lower().replace("https://","").replace("http://","").rstrip("/")
+    task = add_single_domain.delay(domain)
+    return {"message": f"Domain '{domain}' submitted", "task_id": task.id}
+
+
+@app.post("/api/domains/re-fingerprint-all", tags=["Domains"])
+def re_fingerprint_all_domains(db: Session = Depends(get_db)):
+    """Queue vendor re-fingerprinting for all ACTIVE domains with no vendor set."""
+    from app.services.corpus_tasks import enrich_domain_fingerprint
+    domains = db.query(Domain).filter(Domain.status == "ACTIVE").all()
+    queued = 0
+    for d in domains:
+        if not d.vendor_fingerprint:
+            enrich_domain_fingerprint.delay(str(d.id))
+            queued += 1
+    return {"queued": queued, "message": f"Re-fingerprinting {queued} domains"}
 
 
 @app.get("/api/domains/{domain_id}", tags=["Domains"])
@@ -239,6 +268,8 @@ def get_domain_detail(domain_id: str, db: Session = Depends(get_db)):
         "country_code": domain.country_code,
         "discovered_via": domain.discovered_via,
         "notes": domain.notes,
+        "vendor_fingerprint": domain.vendor_fingerprint,
+        "contact_email": domain.contact_email,
         "last_scanned_at": domain.last_scanned_at.isoformat() if domain.last_scanned_at else None,
         "next_scan_due_at": domain.next_scan_due_at.isoformat() if domain.next_scan_due_at else None,
         "scan_count": domain.scan_count,
@@ -283,11 +314,74 @@ def get_domain_detail(domain_id: str, db: Session = Depends(get_db)):
     }
 
 
-@app.post("/api/domains/add", tags=["Domains"])
-def add_domain(domain: str, db: Session = Depends(get_db)):
-    domain = domain.strip().lower().replace("https://","").replace("http://","").rstrip("/")
-    task = add_single_domain.delay(domain)
-    return {"message": f"Domain '{domain}' submitted", "task_id": task.id}
+@app.patch("/api/domains/{domain_id}/contact", tags=["Domains"])
+def update_domain_contact(domain_id: str, email: str, db: Session = Depends(get_db)):
+    """Manually set or update the security contact email for a domain."""
+    try:
+        domain = db.query(Domain).filter(Domain.id == uuid.UUID(domain_id)).first()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid domain ID")
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+
+    old_email = domain.contact_email
+    domain.contact_email = email.strip()
+    db.add(AuditLog(
+        event_type="CONTACT_EMAIL_UPDATED", actor="ANALYST",
+        target_type="domain", target_id=domain.id,
+        details={"domain": domain.domain, "old": old_email, "new": domain.contact_email},
+    ))
+    db.commit()
+    return {"domain": domain.domain, "contact_email": domain.contact_email}
+
+
+@app.post("/api/domains/{domain_id}/lookup-contact", tags=["Domains"])
+def lookup_domain_contact(domain_id: str, db: Session = Depends(get_db)):
+    """
+    Attempt to auto-discover the security contact email for a domain
+    via security.txt lookup and standard convention fallbacks.
+    Saves result to contact_email if found.
+    """
+    from app.services.phase3_tasks import resolve_security_contact
+    try:
+        domain = db.query(Domain).filter(Domain.id == uuid.UUID(domain_id)).first()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid domain ID")
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+
+    result = resolve_security_contact(domain.domain)
+    if result["email"]:
+        domain.contact_email = result["email"]
+        db.add(AuditLog(
+            event_type="CONTACT_EMAIL_DISCOVERED", actor="SYSTEM",
+            target_type="domain", target_id=domain.id,
+            details={"domain": domain.domain, "email": result["email"], "source": result["source"]},
+        ))
+        db.commit()
+
+    return {
+        "domain": domain.domain,
+        "contact_email": result["email"],
+        "source": result["source"],
+        "candidates": result["candidates"],
+    }
+
+
+
+
+@app.post("/api/domains/{domain_id}/re-fingerprint", tags=["Domains"])
+def re_fingerprint_domain(domain_id: str, db: Session = Depends(get_db)):
+    """Re-fingerprint a single domain's tech stack immediately."""
+    from app.services.corpus_tasks import enrich_domain_fingerprint
+    try:
+        domain = db.query(Domain).filter(Domain.id == uuid.UUID(domain_id)).first()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid domain ID")
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    task = enrich_domain_fingerprint.delay(str(domain.id))
+    return {"message": f"Re-fingerprinting {domain.domain}", "task_id": task.id}
 
 
 @app.post("/api/domains/{domain_id}/scan", tags=["Domains"])
@@ -297,6 +391,144 @@ def trigger_scan(domain_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Domain not found")
     task = scan_domain.delay(domain_id)
     return {"message": f"Scan queued for {domain.domain}", "task_id": task.id, "domain": domain.domain}
+
+
+@app.delete("/api/domains/{domain_id}", tags=["Domains"])
+def delete_domain(domain_id: str, db: Session = Depends(get_db)):
+    """Permanently delete a domain and all its findings from the corpus."""
+    try:
+        domain = db.query(Domain).filter(Domain.id == uuid.UUID(domain_id)).first()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid domain ID")
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+
+    domain_name = domain.domain
+    db.add(AuditLog(
+        event_type="DOMAIN_DELETED", actor="ANALYST",
+        target_type="domain", target_id=domain.id,
+        details={"domain": domain_name},
+    ))
+    db.delete(domain)
+    db.commit()
+    return {"message": f"Domain '{domain_name}' deleted", "domain": domain_name}
+
+
+# ── Acknowledgement webhook ────────────────────────────────────
+
+@app.get("/api/ack/{token}", tags=["Disclosure"])
+def acknowledge_disclosure(token: str, db: Session = Depends(get_db)):
+    """
+    One-click acknowledgement link sent inside disclosure emails.
+    When the org's security team clicks the link, this marks the finding
+    as acknowledged, preventing automatic CERT-In escalation.
+    Returns a human-readable confirmation page.
+    """
+    event = db.query(DisclosureEvent).filter(
+        DisclosureEvent.ack_token == token
+    ).first()
+    if not event:
+        return HTMLResponse(content="""
+            <html><body style="font-family:sans-serif;max-width:500px;margin:80px auto;text-align:center">
+            <h2>❌ Invalid or expired acknowledgement link</h2>
+            <p>This link may have already been used or does not exist.</p>
+            </body></html>""", status_code=404)
+
+    now = datetime.now(timezone.utc)
+    already_acked = event.acknowledged_at is not None
+
+    if not already_acked:
+        event.acknowledged_at = now
+        # Mark the finding as acknowledged too
+        finding = db.query(Finding).filter(Finding.id == event.finding_id).first()
+        if finding:
+            finding.acknowledged_at = now
+            db.add(AuditLog(
+                event_type="DISCLOSURE_ACKNOWLEDGED", actor="ORG",
+                target_type="finding", target_id=finding.id,
+                details={
+                    "token": token[:8] + "...",
+                    "recipient": event.recipient_email,
+                    "finding_type": finding.finding_type,
+                },
+            ))
+        db.commit()
+
+    domain_name = ""
+    finding = db.query(Finding).filter(Finding.id == event.finding_id).first()
+    if finding:
+        domain = db.query(Domain).filter(Domain.id == finding.domain_id).first()
+        domain_name = domain.domain if domain else ""
+
+    msg = "already acknowledged" if already_acked else "acknowledged"
+    html = f"""
+        <html><body style="font-family:sans-serif;max-width:560px;margin:80px auto;text-align:center;background:#f8f9fa;padding:40px;border-radius:8px">
+        <div style="font-size:48px;margin-bottom:16px">{"✅" if not already_acked else "ℹ️"}</div>
+        <h2 style="color:#1a1a2e">Disclosure {msg.title()}</h2>
+        {"<p>Thank you. Your acknowledgement has been recorded.</p>" if not already_acked else "<p>This disclosure was already acknowledged.</p>"}
+        <p style="color:#666;font-size:14px">Domain: <strong>{domain_name}</strong></p>
+        <p style="color:#666;font-size:14px">Acknowledged at: {now.strftime('%Y-%m-%d %H:%M UTC')}</p>
+        <hr style="margin:24px 0;border-color:#ddd">
+        <p style="color:#999;font-size:12px">
+            Please reply to the original disclosure email with your remediation timeline.<br>
+            CVD Reference: {event.subject or "—"}
+        </p>
+        </body></html>"""
+    return HTMLResponse(content=html)
+
+
+# ── Phase 3 summary for dashboard ─────────────────────────────
+
+@app.get("/api/phase3/summary", tags=["Phase3"])
+def phase3_summary(db: Session = Depends(get_db)):
+    """Summary stats for the Phase 3 dashboard widget."""
+    now = datetime.now(timezone.utc)
+    due_window = now + timedelta(hours=24)
+
+    awaiting_critical = db.query(Finding).filter(
+        Finding.disclosed_at == None,           # noqa: E711
+        Finding.severity == "CRITICAL",
+        Finding.status.notin_(["RESOLVED", "FALSE_POSITIVE"]),
+    ).count()
+
+    awaiting_sla = db.query(Finding).filter(
+        Finding.disclosed_at == None,           # noqa: E711
+        Finding.severity != "CRITICAL",
+        Finding.status.notin_(["RESOLVED", "FALSE_POSITIVE"]),
+        Finding.disclosure_sla_due != None,     # noqa: E711
+        Finding.disclosure_sla_due <= due_window,
+    ).count()
+
+    escalation_pending = db.query(Finding).filter(
+        Finding.severity == "CRITICAL",
+        Finding.status == "DISCLOSED",
+        Finding.acknowledged_at == None,        # noqa: E711
+        Finding.disclosed_at != None,           # noqa: E711
+        Finding.disclosed_at < now - timedelta(hours=72),
+    ).count()
+
+    no_contact = db.query(Domain).filter(
+        Domain.status == "ACTIVE",
+        Domain.contact_email == None,           # noqa: E711
+    ).count()
+
+    disclosed_total = db.query(Finding).filter(
+        Finding.disclosed_at != None,           # noqa: E711
+    ).count()
+
+    acknowledged = db.query(Finding).filter(
+        Finding.acknowledged_at != None,        # noqa: E711
+    ).count()
+
+    return {
+        "awaiting_disclosure": awaiting_critical + awaiting_sla,
+        "awaiting_critical": awaiting_critical,
+        "awaiting_sla": awaiting_sla,
+        "escalation_pending": escalation_pending,
+        "no_contact_email": no_contact,
+        "disclosed_total": disclosed_total,
+        "acknowledged": acknowledged,
+    }
 
 
 # ── Findings ──────────────────────────────────────────────────
@@ -411,29 +643,57 @@ def get_finding_detail(finding_id: str, db: Session = Depends(get_db)):
 @app.patch("/api/findings/{finding_id}/status", tags=["Findings"])
 def update_finding_status(
     finding_id: str, new_status: str,
+    new_severity: Optional[str] = None,
     reason: Optional[str] = None, analyst: str = "ANALYST",
     db: Session = Depends(get_db)
 ):
+    """
+    Update finding status. Optionally change severity at the same time.
+    new_severity: CRITICAL | HIGH | MEDIUM | LOW | INFO
+    """
     finding = db.query(Finding).filter(Finding.id == uuid.UUID(finding_id)).first()
     if not finding:
         raise HTTPException(status_code=404, detail="Finding not found")
-    valid = ["CONFIRMED", "FALSE_POSITIVE", "RESOLVED", "ESCALATED"]
-    if new_status.upper() not in valid:
-        raise HTTPException(status_code=400, detail=f"Invalid status. Use: {valid}")
+    valid_status = ["CONFIRMED", "FALSE_POSITIVE", "RESOLVED", "ESCALATED"]
+    if new_status.upper() not in valid_status:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Use: {valid_status}")
+
+    old_severity = finding.severity
     finding.status = new_status.upper()
     finding.reviewed_by = analyst
     finding.reviewed_at = datetime.now(timezone.utc)
+
+    if new_severity:
+        valid_sev = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+        if new_severity.upper() not in valid_sev:
+            raise HTTPException(status_code=400, detail=f"Invalid severity. Use: {valid_sev}")
+        finding.severity = new_severity.upper()
+        # Recalculate SLA from new severity
+        from app.services.scanner_tasks import compute_sla
+        finding.disclosure_sla_due = compute_sla(new_severity.upper())
+
     if new_status.upper() == "FALSE_POSITIVE":
         finding.false_positive_reason = reason
     if new_status.upper() == "RESOLVED":
         finding.resolved_at = datetime.now(timezone.utc)
+
     db.add(AuditLog(
         event_type="FINDING_STATUS_UPDATED", actor=analyst,
         target_type="finding", target_id=finding.id,
-        details={"new_status": new_status, "reason": reason}
+        details={
+            "new_status": new_status,
+            "old_severity": old_severity,
+            "new_severity": finding.severity,
+            "reason": reason,
+        }
     ))
     db.commit()
-    return {"message": "Status updated", "finding_id": finding_id, "new_status": new_status}
+    return {
+        "message": "Updated",
+        "finding_id": finding_id,
+        "new_status": finding.status,
+        "severity": finding.severity,
+    }
 
 
 @app.post("/api/jobs/{job_id}/rescan", tags=["Jobs"])
@@ -492,6 +752,25 @@ def trigger_rescan_queue():
     """
     task = queue_domains_for_rescan.delay()
     return {"message": "Rescan queue triggered", "task_id": task.id}
+
+
+@app.post("/api/scanner/enumerate-subdomains", tags=["Scanner"])
+def trigger_subdomain_enum(domain: str, include_bruteforce: bool = True):
+    """
+    Phase 2: On-demand full subdomain enumeration for a root domain.
+    Runs all 15 configured sources concurrently:
+      Free:  crt.sh, AlienVault, HackerTarget, RapidDNS, BufferOver,
+             ThreatCrowd, DNS brute-force
+      Keyed: Shodan, Censys, ZoomEye, SecurityTrails, VirusTotal,
+             BinaryEdge, WhoisXML, Chaos
+    Results are DNS-validated and added to the corpus automatically.
+    """
+    task = enumerate_domain_subdomains.delay(domain, include_bruteforce)
+    return {
+        "message": f"Subdomain enumeration started for {domain}",
+        "task_id": task.id,
+        "domain": domain,
+    }
 
 
 @app.post("/api/scanner/scan-all-pending", tags=["Scanner"])
@@ -605,4 +884,143 @@ def get_audit_log(
             }
             for log in logs
         ]
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+#  PHASE 3 ENDPOINTS
+# ─────────────────────────────────────────────────────────────
+
+@app.post("/api/phase3/pipeline", tags=["Phase3"])
+def trigger_phase3_pipeline(dry_run: bool = True):
+    """
+    Run full Phase 3 pipeline: risk scoring → breach correlation →
+    vendor correlation → disclosure workflow → CERT-In escalation.
+    dry_run=True (default) — emails are logged but not sent.
+    """
+    task = run_phase3_pipeline.delay(dry_run=dry_run)
+    return {
+        "message": f"Phase 3 pipeline started (dry_run={dry_run})",
+        "task_id": task.id,
+    }
+
+
+@app.post("/api/phase3/risk-scores", tags=["Phase3"])
+def trigger_risk_scores():
+    """Recalculate composite risk scores for all ACTIVE domains."""
+    task = update_risk_scores.delay()
+    return {"message": "Risk score update queued", "task_id": task.id}
+
+
+@app.post("/api/phase3/breach-correlation", tags=["Phase3"])
+def trigger_breach_correlation(domain_id: Optional[str] = None):
+    """
+    Run HIBP + Shodan breach correlation.
+    Optionally restrict to a single domain by ID.
+    """
+    task = run_breach_correlation.delay(domain_id=domain_id)
+    return {
+        "message": "Breach correlation queued",
+        "task_id": task.id,
+        "scope": domain_id or "all_active",
+    }
+
+
+@app.post("/api/phase3/vendor-correlation", tags=["Phase3"])
+def trigger_vendor_correlation():
+    """Cross-correlate findings by CMS/framework vendor across all domains."""
+    task = run_vendor_correlation.delay()
+    return {"message": "Vendor correlation queued", "task_id": task.id}
+
+
+@app.post("/api/phase3/disclosure", tags=["Phase3"])
+def trigger_disclosure(dry_run: bool = True):
+    """
+    Run disclosure workflow for all SLA-due findings.
+    dry_run=True — emails logged only. Set dry_run=false for production.
+    """
+    task = run_disclosure_workflow.delay(dry_run=dry_run)
+    return {
+        "message": f"Disclosure workflow queued (dry_run={dry_run})",
+        "task_id": task.id,
+    }
+
+
+@app.post("/api/phase3/escalate", tags=["Phase3"])
+def trigger_certin_escalation(dry_run: bool = True):
+    """Escalate qualifying findings to CERT-In."""
+    task = run_certin_escalation.delay(dry_run=dry_run)
+    return {
+        "message": f"CERT-In escalation queued (dry_run={dry_run})",
+        "task_id": task.id,
+    }
+
+
+@app.get("/api/phase3/risk-overview", tags=["Phase3"])
+def get_risk_overview(db: Session = Depends(get_db)):
+    """
+    Return risk score breakdown across all ACTIVE domains.
+    Reads from domain.notes JSON (populated by update_risk_scores task).
+    """
+    import json as json_mod
+
+    domains = db.query(Domain).filter(Domain.status == "ACTIVE").all()
+    rows = []
+    for d in domains:
+        try:
+            notes = json_mod.loads(d.notes or "{}")
+        except Exception:
+            notes = {}
+
+        rows.append({
+            "domain": d.domain,
+            "sector": d.sector,
+            "vendor": d.vendor_fingerprint,
+            "iocs_score": d.iocs_score,
+            "risk_score": notes.get("risk_score", 0),
+            "open_critical": notes.get("open_critical", 0),
+            "open_high": notes.get("open_high", 0),
+            "dark_web_hits": notes.get("dark_web_hits", 0),
+            "sla_breached": notes.get("sla_breached", 0),
+            "last_scored_at": notes.get("last_scored_at"),
+        })
+
+    rows.sort(key=lambda r: r["risk_score"], reverse=True)
+
+    return {
+        "total": len(rows),
+        "domains": rows[:100],  # top 100 by risk
+    }
+
+
+@app.get("/api/phase3/disclosures", tags=["Phase3"])
+def list_disclosures(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=100),
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """List all disclosure events with pagination."""
+    q = db.query(DisclosureEvent)
+    if status:
+        q = q.filter(DisclosureEvent.send_status == status.upper())
+    total = q.count()
+    events = q.order_by(desc(DisclosureEvent.created_at)).offset((page - 1) * per_page).limit(per_page).all()
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "disclosures": [
+            {
+                "id": str(e.id),
+                "finding_id": str(e.finding_id),
+                "recipient_email": e.recipient_email,
+                "recipient_type": e.recipient_type,
+                "subject": e.subject,
+                "sent_at": e.sent_at.isoformat() if e.sent_at else None,
+                "send_status": e.send_status,
+                "created_at": e.created_at.isoformat(),
+            }
+            for e in events
+        ],
     }

@@ -48,6 +48,7 @@ class DomainStatus(str, enum.Enum):
     WHITELISTED = "WHITELISTED"
 
 class EntityType(str, enum.Enum):
+    # PII / Identity
     AADHAAR = "AADHAAR"
     PAN = "PAN"
     VOTER_ID = "VOTER_ID"
@@ -57,15 +58,34 @@ class EntityType(str, enum.Enum):
     CREDIT_CARD = "CREDIT_CARD"
     PHONE_NUMBER = "PHONE_NUMBER"
     EMAIL = "EMAIL"
+    UPI_ID = "UPI_ID"
+    ABHA_ID = "ABHA_ID"
+    # Secrets / Credentials
     ENV_FILE = "ENV_FILE"
+    PRIVATE_KEY = "PRIVATE_KEY"
+    API_KEY = "API_KEY"
+    AWS_KEY = "AWS_KEY"
+    STRIPE_KEY = "STRIPE_KEY"
+    SECRET_FIELD = "SECRET_FIELD"
+    AWS_CREDS = "AWS_CREDS"
+    AWS_CONFIG = "AWS_CONFIG"
+    AZURE_CREDS = "AZURE_CREDS"
+    # Infrastructure Exposure
     GIT_REPO = "GIT_REPO"
     DATABASE_DUMP = "DATABASE_DUMP"
     CONFIG_FILE = "CONFIG_FILE"
+    SOURCE_CODE = "SOURCE_CODE"
     ADMIN_PANEL = "ADMIN_PANEL"
     OPEN_DIRECTORY = "OPEN_DIRECTORY"
     CLOUD_STORAGE = "CLOUD_STORAGE"
-    PRIVATE_KEY = "PRIVATE_KEY"
-    API_KEY = "API_KEY"
+    CLOUD_METADATA = "CLOUD_METADATA"
+    KUBE_CONFIG = "KUBE_CONFIG"
+    SPRING_BOOT = "SPRING_BOOT"
+    MEMORY_DUMP = "MEMORY_DUMP"
+    SHELL_HISTORY = "SHELL_HISTORY"
+    SESSION_DATA = "SESSION_DATA"
+    CI_CONFIG = "CI_CONFIG"
+    # Generic
     OTHER = "OTHER"
 
 
@@ -100,6 +120,8 @@ class Domain(Base):
 
     discovered_via      = Column(String(50))
     sector              = Column(String(50))
+    vendor_fingerprint  = Column(String(200))   # CMS/framework detected (WordPress, Joomla, etc.)
+    contact_email       = Column(String(255))   # Security contact: from security.txt or manually set
     notes               = Column(Text)
 
     created_at          = Column(DateTime(timezone=True), default=datetime.now)
@@ -218,6 +240,8 @@ class DisclosureEvent(Base):
     sent_at         = Column(DateTime(timezone=True))
     send_status     = Column(String(20))
     error_message   = Column(Text)
+    ack_token       = Column(String(64), unique=True, index=True)  # token for acknowledgement URL
+    acknowledged_at = Column(DateTime(timezone=True))              # set when org clicks ack link
     created_at      = Column(DateTime(timezone=True), default=datetime.now)
 
     finding         = relationship("Finding", back_populates="disclosures")

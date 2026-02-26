@@ -46,6 +46,7 @@ from app.db.database import SessionLocal
 from app.models.models import Domain, AuditLog
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.services.subdomain_enum import enumerate_subdomains
 
 logger = get_logger("corpus.builder")
 
@@ -137,100 +138,154 @@ SECTOR_KEYWORDS = {
 
 # Vendor/CMS fingerprint signatures
 VENDOR_SIGNATURES: List[Dict] = [
-    # WordPress
+    # ── HIGH RISK CMS (plugin attack surface) ─────────────────
     {
         "vendor": "WordPress",
+        # Any 1 of these is definitive — WP has very distinct paths
         "signals": [
-            re.compile(r'/wp-content/'),
+            re.compile(r'/wp-content/(?:themes|plugins|uploads)/'),
             re.compile(r'/wp-includes/'),
-            re.compile(r'wp-json'),
+            re.compile(r'wp-json/wp/v'),
+            re.compile(r'<meta[^>]+generator[^>]+WordPress', re.I),
+            re.compile(r'wordpress', re.I),           # X-Powered-By / generator header
         ],
-        "version_re": re.compile(r'WordPress\s+([\d.]+)', re.I),
-        "risk": "HIGH",   # WP plugin vulns are systemic
+        "min_signals": 1,
+        "version_re": re.compile(r'WordPress[/ ]([\d.]+)', re.I),
+        "risk": "HIGH",
     },
-    # Joomla
     {
         "vendor": "Joomla",
         "signals": [
-            re.compile(r'/components/com_'),
-            re.compile(r'Joomla!'),
+            re.compile(r'/components/com_[a-z]'),
+            re.compile(r'/media/jui/'),
             re.compile(r'/media/system/js/'),
+            re.compile(r'<meta[^>]+generator[^>]+Joomla', re.I),
+            re.compile(r'joomla', re.I),
         ],
-        "version_re": re.compile(r'Joomla!\s+([\d.]+)', re.I),
+        "min_signals": 1,
+        "version_re": re.compile(r'Joomla[!/ ]([\d.]+)', re.I),
         "risk": "HIGH",
     },
-    # Drupal
+    # ── MEDIUM RISK ────────────────────────────────────────────
     {
         "vendor": "Drupal",
         "signals": [
             re.compile(r'Drupal\.settings'),
-            re.compile(r'/sites/default/files/'),
-            re.compile(r'drupal.org'),
+            re.compile(r'/sites/(?:default|all)/(?:files|modules|themes)/'),
+            re.compile(r'<meta[^>]+generator[^>]+Drupal', re.I),
+            re.compile(r'drupal', re.I),
         ],
-        "version_re": re.compile(r'Drupal\s+([\d.]+)', re.I),
+        "min_signals": 1,
+        "version_re": re.compile(r'Drupal[/ ]([\d.]+)', re.I),
         "risk": "MEDIUM",
     },
-    # Django
+    {
+        "vendor": "NIC-eGov",
+        "signals": [
+            re.compile(r'National Informatics Centre', re.I),
+            re.compile(r'eGov(?:ernance)?\s+Framework', re.I),
+            re.compile(r'NIC\s+(?:eGov|Portal)', re.I),
+        ],
+        "min_signals": 1,
+        "version_re": None,
+        "risk": "MEDIUM",
+    },
+    {
+        "vendor": "Spring-Boot",
+        "signals": [
+            re.compile(r'Whitelabel Error Page'),
+            re.compile(r'/actuator(?:/health)?'),
+            re.compile(r'Spring Framework', re.I),
+        ],
+        "min_signals": 1,
+        "version_re": re.compile(r'Spring-Boot[/ ]([\d.]+)', re.I),
+        "risk": "MEDIUM",
+    },
+    {
+        "vendor": "Struts",          # Apache Struts — CVE-prone
+        "signals": [
+            re.compile(r'\.action(\?|$)'),
+            re.compile(r'struts', re.I),
+            re.compile(r'org\.apache\.struts', re.I),
+        ],
+        "min_signals": 2,
+        "version_re": re.compile(r'Struts[/ ]([\d.]+)', re.I),
+        "risk": "HIGH",
+    },
+    {
+        "vendor": "Magento",
+        "signals": [
+            re.compile(r'/skin/frontend/'),
+            re.compile(r'Mage\.'),
+            re.compile(r'magento', re.I),
+        ],
+        "min_signals": 1,
+        "version_re": re.compile(r'Magento[/ ]([\d.]+)', re.I),
+        "risk": "HIGH",
+    },
+    # ── LOW RISK FRAMEWORKS ────────────────────────────────────
     {
         "vendor": "Django",
         "signals": [
             re.compile(r'csrfmiddlewaretoken'),
             re.compile(r'django', re.I),
         ],
+        "min_signals": 2,            # csrf alone is too generic
         "version_re": None,
         "risk": "LOW",
     },
-    # Laravel
     {
         "vendor": "Laravel",
         "signals": [
             re.compile(r'laravel_session'),
             re.compile(r'X-Powered-By.*Laravel', re.I),
+            re.compile(r'laravel', re.I),
         ],
-        "version_re": None,
+        "min_signals": 1,
+        "version_re": re.compile(r'Laravel[/ ]([\d.]+)', re.I),
         "risk": "LOW",
     },
-    # PHP (generic)
-    {
-        "vendor": "PHP",
-        "signals": [
-            re.compile(r'\.php(\?|$|#)'),
-        ],
-        "version_re": re.compile(r'PHP/([\d.]+)', re.I),
-        "risk": "LOW",
-    },
-    # NIC e-Gov (common Indian government platform)
-    {
-        "vendor": "NIC-eGov",
-        "signals": [
-            re.compile(r'nic\.in'),
-            re.compile(r'eGov', re.I),
-            re.compile(r'National Informatics Centre', re.I),
-        ],
-        "version_re": None,
-        "risk": "MEDIUM",
-    },
-    # Spring Boot (Java)
-    {
-        "vendor": "Spring-Boot",
-        "signals": [
-            re.compile(r'Whitelabel Error Page'),
-            re.compile(r'application/json.*spring', re.I),
-            re.compile(r'actuator/health'),
-        ],
-        "version_re": None,
-        "risk": "MEDIUM",
-    },
-    # ASP.NET
     {
         "vendor": "ASP.NET",
         "signals": [
             re.compile(r'__VIEWSTATE'),
-            re.compile(r'ASP\.NET', re.I),
-            re.compile(r'\.aspx', re.I),
+            re.compile(r'__EVENTVALIDATION'),
+            re.compile(r'\.aspx(\?|$|#)', re.I),
+            re.compile(r'X-AspNet-Version', re.I),
         ],
-        "version_re": re.compile(r'ASP\.NET\s+([\d.]+)', re.I),
+        "min_signals": 1,
+        "version_re": re.compile(r'ASP\.NET[/ ]([\d.]+)', re.I),
         "risk": "LOW",
+    },
+    {
+        "vendor": "PHP",
+        # PHP alone is too broad — must have version header to be useful
+        "signals": [
+            re.compile(r'PHP/[\d.]+', re.I),       # Server or X-Powered-By
+        ],
+        "min_signals": 1,
+        "version_re": re.compile(r'PHP/([\d.]+)', re.I),
+        "risk": "LOW",
+    },
+    {
+        "vendor": "OpenCart",
+        "signals": [
+            re.compile(r'/catalog/view/theme/'),
+            re.compile(r'route=common/home'),
+        ],
+        "min_signals": 1,
+        "version_re": re.compile(r'OpenCart[/ ]([\d.]+)', re.I),
+        "risk": "MEDIUM",
+    },
+    {
+        "vendor": "TYPO3",
+        "signals": [
+            re.compile(r'typo3', re.I),
+            re.compile(r'/typo3conf/'),
+        ],
+        "min_signals": 1,
+        "version_re": re.compile(r'TYPO3[/ ]([\d.]+)', re.I),
+        "risk": "MEDIUM",
     },
 ]
 
@@ -411,29 +466,56 @@ def compute_iocs(domain: str, tld: str, ip: Optional[str],
 
 def fingerprint_vendor(html: str, headers: Dict) -> Optional[Dict]:
     """
-    Detect CMS, framework, and version from homepage HTML + headers.
-    Returns fingerprint dict or None.
+    Detect CMS, framework, and version from homepage HTML + response headers.
+
+    Checks (in order of reliability):
+      1. meta generator tag
+      2. Distinctive URL paths / JS variables
+      3. HTTP response headers: X-Powered-By, Server, X-Generator
+      4. Cookie names
+
+    Uses per-signature min_signals threshold so noisy signals (PHP)
+    require a version header while distinctive signals (wp-content) fire on 1.
+    Returns fingerprint dict with vendor+version string, or None.
     """
     if not html:
         return None
 
-    header_str = " ".join(f"{k}: {v}" for k, v in (headers or {}).items())
+    # Build a combined search corpus: HTML + header key:value pairs
+    headers = headers or {}
+    header_str = " ".join(f"{k}: {v}" for k, v in headers.items())
     combined = html + "\n" + header_str
 
+    # Also extract meta generator content for fast checks
+    gen_match = re.search(r'<meta[^>]+name=["\']generator["\'][^>]*content=["\']([^"\']+)', html, re.I)
+    if not gen_match:
+        gen_match = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]*name=["\']generator', html, re.I)
+    generator_content = gen_match.group(1).lower() if gen_match else ""
+
     for sig in VENDOR_SIGNATURES:
+        min_s = sig.get("min_signals", 1)
         matches = sum(1 for s in sig["signals"] if s.search(combined))
-        if matches >= 2 or (len(sig["signals"]) == 1 and matches == 1):
-            version = None
-            if sig["version_re"]:
-                m = sig["version_re"].search(combined)
-                if m:
-                    version = m.group(1)
-            return {
-                "vendor": sig["vendor"],
-                "version": version,
-                "risk": sig["risk"],
-                "signal_count": matches,
-            }
+        if matches < min_s:
+            continue
+
+        # Extract version — try combined corpus then generator tag
+        version = None
+        if sig["version_re"]:
+            m = sig["version_re"].search(combined)
+            if m:
+                version = m.group(1)
+
+        vendor_str = sig["vendor"]
+        if version:
+            vendor_str = f"{sig['vendor']} {version}"
+
+        return {
+            "vendor": vendor_str,          # e.g. "WordPress 6.4.2" or "WordPress"
+            "vendor_name": sig["vendor"],  # always bare name for correlation
+            "version": version,
+            "risk": sig["risk"],
+            "signal_count": matches,
+        }
     return None
 
 
@@ -509,8 +591,8 @@ def upsert_domain(db, domain: str, tld: str, ip: Optional[str],
         if iocs_score > (existing.iocs_score or 0):
             existing.iocs_score = iocs_score
             changed = True
-        if vendor_str and existing.vendor_fingerprint != vendor_str:
-            existing.vendor_fingerprint = vendor_str
+        # Update if vendor name changed (ignoring version bump — always store latest)
+            existing.vendor_fingerprint = vendor_str  # e.g. "WordPress 6.4.2"
             changed = True
         if content_hash and existing.baseline_hash != content_hash:
             existing.baseline_hash = content_hash
@@ -573,26 +655,27 @@ def get_fallback_domains(tld: str) -> Set[str]:
 def run_pilot_corpus_refresh(self):
     """
     Phase 1 corpus refresh — .gov.in, .nic.in, .edu.in, .ac.in, .res.in.
-    Retained as an alias for backward compatibility; calls phase2 corpus
-    but restricted to PILOT_TLDS.
+    Runs inline (not as subtask) to avoid Celery's forbidden .get() inside task.
     """
-    return run_corpus_refresh_phase2.apply_async(
-        kwargs={"tlds": PILOT_TLDS}
-    ).get(timeout=600)
+    # Call the underlying function directly instead of spawning a subtask
+    return _do_corpus_refresh(tlds=PILOT_TLDS)
 
 
 @celery_app.task(name="app.services.corpus_tasks.run_corpus_refresh_phase2", bind=True)
 def run_corpus_refresh_phase2(self, tlds: Optional[List[str]] = None):
     """
-    Phase 2 Corpus Builder.
+    Phase 2 Corpus Builder — full Indian TLD sweep.
+    """
+    return _do_corpus_refresh(tlds=tlds)
 
-    Discovers Indian domains across all Indian TLDs using CT logs,
-    scores each with multi-signal IOCS, fingerprints the technology
-    stack, and stores the domain with a baseline content hash for
-    differential scanning.
 
-    Set tlds=None to run all INDIAN_TLDS (full Phase 2 sweep).
-    Set tlds=PILOT_TLDS for the Phase 1 subset only.
+def _do_corpus_refresh(tlds: Optional[List[str]] = None) -> dict:
+    """
+    Core corpus refresh logic (plain function, safe to call from any Celery task
+    or directly — avoids the illegal .get()-inside-task anti-pattern).
+
+    Set tlds=None for full INDIAN_TLDS sweep.
+    Set tlds=PILOT_TLDS for Phase 1 subset.
     """
     target_tlds = tlds or INDIAN_TLDS
 
@@ -608,12 +691,34 @@ def run_corpus_refresh_phase2(self, tlds: Optional[List[str]] = None):
         for tld in target_tlds:
             logger.info(f"\n── TLD: {tld} ──────────────────────")
 
-            # 1. Get candidates from CT logs
-            candidates = fetch_ct_logs(f"%.{tld.lstrip('.')}", max_results=300)
-            if not candidates:
-                candidates = get_fallback_domains(tld)
+            # 1. Discover root domains from CT logs
+            root_domains = fetch_ct_logs(f"%.{tld.lstrip('.')}", max_results=300)
+            if not root_domains:
+                root_domains = get_fallback_domains(tld)
 
-            logger.info(f"  {len(candidates)} candidates from CT logs")
+            logger.info(f"  {len(root_domains)} root domains from CT logs for {tld}")
+
+            # 2. For each root domain, enumerate ALL subdomains via
+            #    multi-source enumerator (crt.sh + Shodan + Censys +
+            #    ZoomEye + SecurityTrails + VirusTotal + BinaryEdge +
+            #    WhoisXML + Chaos + AlienVault + DNS brute-force)
+            candidates: set = set()
+            for root in list(root_domains)[:50]:  # cap roots per TLD to avoid overrun
+                try:
+                    enum_result = enumerate_subdomains(root, include_bruteforce=True)
+                    candidates.update(enum_result.subdomains)
+                    candidates.add(root)  # always include the root itself
+                    logger.info(
+                        f"  [{root}] {len(enum_result.subdomains)} subdomains "
+                        f"| sources: {enum_result.source_stats}"
+                    )
+                    if enum_result.errors:
+                        logger.debug(f"  [{root}] source errors: {enum_result.errors}")
+                except Exception as e:
+                    logger.warning(f"  Subdomain enum failed for {root}: {e}")
+                    candidates.add(root)  # at minimum include the root
+
+            logger.info(f"  {len(candidates)} total candidates after subdomain enum for {tld}")
 
             for domain in candidates:
                 stats["total_checked"] += 1
@@ -725,7 +830,7 @@ def enrich_domain_fingerprint(self, domain_id: str):
         old_hash = domain_row.baseline_hash
         changed = (old_hash is not None and content_hash != old_hash)
 
-        domain_row.vendor_fingerprint = vendor_fp["vendor"] if vendor_fp else domain_row.vendor_fingerprint
+        domain_row.vendor_fingerprint = vendor_fp["vendor"] if vendor_fp else domain_row.vendor_fingerprint  # includes version
         domain_row.baseline_hash = content_hash
         domain_row.updated_at = datetime.now(timezone.utc)
         db.commit()
@@ -813,5 +918,74 @@ def add_single_domain(domain: str):
             "is_new": is_new,
             "status": "queued" if is_new else action,
         }
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.services.corpus_tasks.enumerate_domain_subdomains", bind=True)
+def enumerate_domain_subdomains(self, domain: str, include_bruteforce: bool = True):
+    """
+    On-demand full subdomain enumeration for a specific domain.
+    Runs all configured sources concurrently, DNS-validates results,
+    and upserts every discovered subdomain into the corpus.
+
+    Triggered via:
+      POST /api/scanner/enumerate-subdomains  {"domain": "example.gov.in"}
+    Or manually via Celery:
+      enumerate_domain_subdomains.delay("example.gov.in")
+    """
+    logger.info(f"On-demand subdomain enum: {domain}")
+    db = SessionLocal()
+    stats = {"new": 0, "updated": 0, "total_found": 0}
+
+    try:
+        enum_result = enumerate_subdomains(domain, include_bruteforce=include_bruteforce)
+        stats["total_found"] = len(enum_result.subdomains)
+
+        for sub in enum_result.subdomains:
+            # Determine TLD
+            tld = ".in"
+            for t in INDIAN_TLDS + [".com", ".org", ".net"]:
+                if sub.endswith(t.lstrip(".")):
+                    tld = t
+                    break
+
+            ip = resolve_domain(sub)
+            _, html, _, headers = fetch_homepage(sub) if ip else (None, None, None, None)
+            asn = "" if any(sub.endswith(t.lstrip(".")) for t in INDIAN_TLDS) else None
+            iocs, sig_count, _ = compute_iocs(sub, tld, ip, html, headers, asn)
+            vendor_fp = fingerprint_vendor(html or "", headers or {})
+            content_hash = compute_content_hash(html)
+            sector = infer_sector(sub, html)
+
+            is_new, action = upsert_domain(
+                db, sub, tld, ip, iocs, sig_count, "SUBDOMAIN_ENUM",
+                sector, content_hash, vendor_fp,
+            )
+            if is_new:
+                stats["new"] += 1
+            elif action == "updated":
+                stats["updated"] += 1
+
+        db.add(AuditLog(
+            event_type="SUBDOMAIN_ENUM_COMPLETED",
+            actor="SYSTEM",
+            details={"root_domain": domain, **stats,
+                     "source_stats": enum_result.source_stats,
+                     "errors": enum_result.errors},
+        ))
+        db.commit()
+
+        logger.info(
+            f"Subdomain enum done for {domain}: "
+            f"{stats['total_found']} found, "
+            f"{stats['new']} new, {stats['updated']} updated"
+        )
+        return {"status": "success", "domain": domain, **stats,
+                "source_stats": enum_result.source_stats}
+
+    except Exception as e:
+        logger.error(f"Subdomain enum task failed for {domain}: {e}", exc_info=True)
+        return {"status": "error", "domain": domain, "error": str(e)}
     finally:
         db.close()
