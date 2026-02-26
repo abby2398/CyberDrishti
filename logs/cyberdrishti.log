@@ -1,0 +1,60 @@
+2026-02-25 05:55:23 UTC | INFO     | api.main                       | ============================================================
+2026-02-25 05:55:23 UTC | INFO     | api.main                       |   CyberDrishti v1.0.0 starting up
+2026-02-25 05:55:23 UTC | INFO     | api.main                       |   Environment: development
+2026-02-25 05:55:23 UTC | INFO     | api.main                       | ============================================================
+2026-02-25 05:55:23 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-25 09:22:41 UTC | INFO     | api.main                       | ============================================================
+2026-02-25 09:22:41 UTC | INFO     | api.main                       |   CyberDrishti v1.0.0 starting up
+2026-02-25 09:22:41 UTC | INFO     | api.main                       |   Environment: development
+2026-02-25 09:22:41 UTC | INFO     | api.main                       | ============================================================
+2026-02-25 09:22:41 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-25 09:52:27 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-25 09:52:27 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-25 09:53:06 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-25 09:53:06 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-25 18:08:01 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-25 18:08:02 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-25 18:19:37 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-25 18:19:37 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-25 18:25:11 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-25 18:25:11 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-25 18:25:27 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-25 18:25:27 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-25 23:56:32 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-25 23:56:32 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 00:09:01 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 00:09:01 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 04:18:34 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 04:18:34 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 04:24:57 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 04:24:57 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 04:29:26 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 04:29:26 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:05:11 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:05:11 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:05:51 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:05:51 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:12:25 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:12:25 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:12:51 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:12:51 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:12:53 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:12:53 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:12:54 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:12:54 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:17:19 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:17:19 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:18:14 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:18:14 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:18:59 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:18:59 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:20:28 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:20:28 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:28:17 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:28:17 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:31:35 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:31:35 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:34:44 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:34:44 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-26 06:42:13 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-26 06:42:13 UTC | INFO     | db.database                    | Database connection: OK

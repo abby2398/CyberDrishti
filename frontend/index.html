@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CyberDrishti — CERT-IN</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#070e1c;--navy2:#0b1628;--card:#0e1e35;--border:#162a4a;
+  --cyan:#00c8d4;--saffron:#ff7518;--green:#00d48a;--red:#ff4545;
+  --gold:#ffc107;--purple:#9c6bff;--text:#dce8f8;--muted:#5a7a9a;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--navy);color:var(--text);font-family:'Syne',sans-serif;height:100vh;overflow:hidden;display:flex;}
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(ellipse at 20% 50%,rgba(0,200,212,.04) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(255,117,24,.03) 0%,transparent 60%);pointer-events:none;z-index:0;}
+
+.sidebar{width:220px;min-width:220px;background:var(--navy2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh;position:relative;z-index:1;}
+.logo{padding:20px 16px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.logo-name{font-size:22px;font-weight:800;letter-spacing:-0.5px;}
+.logo-c{color:var(--cyan);}.logo-d{color:var(--saffron);}
+.logo-sub{font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:2px;margin-top:2px;}
+.logo-badge{margin-top:8px;display:inline-block;background:rgba(255,69,69,.12);border:1px solid rgba(255,69,69,.35);color:var(--red);font-size:9px;font-family:'Space Mono',monospace;padding:2px 7px;border-radius:2px;letter-spacing:1px;}
+nav{padding:12px 0;flex:1;overflow-y:auto;}
+.nav-label{font-size:9px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);padding:10px 16px 5px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;border-left:3px solid transparent;color:var(--muted);}
+.nav-item:hover{background:rgba(255,255,255,.04);color:var(--text);}
+.nav-item.active{background:rgba(0,200,212,.07);border-left-color:var(--cyan);color:var(--cyan);}
+.nav-icon{font-size:15px;width:18px;text-align:center;}
+.status-dock{padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;}
+.status-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);margin-bottom:4px;}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}.dot.ok{background:var(--green);box-shadow:0 0 5px var(--green);}.dot.err{background:var(--red);}.dot.warn{background:var(--gold);}
+
+.main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative;z-index:1;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 22px;border-bottom:1px solid var(--border);background:var(--navy2);flex-shrink:0;}
+.topbar-title{font-size:16px;font-weight:700;}
+.clock{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);}
+.content{flex:1;overflow-y:auto;padding:20px 22px;}
+.content::-webkit-scrollbar{width:5px;}.content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:all .12s;font-family:'Syne',sans-serif;white-space:nowrap;text-decoration:none;}
+.btn-cyan{background:var(--cyan);color:var(--navy);}.btn-cyan:hover{background:#00dce9;}
+.btn-ghost{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border);}.btn-ghost:hover{background:rgba(255,255,255,.09);}
+.btn-green{background:rgba(0,212,138,.15);color:var(--green);border:1px solid rgba(0,212,138,.3);}
+.btn-red{background:rgba(255,69,69,.15);color:var(--red);border:1px solid rgba(255,69,69,.3);}
+.btn-gold{background:rgba(255,193,7,.15);color:var(--gold);border:1px solid rgba(255,193,7,.3);}
+.btn-orange{background:rgba(255,117,24,.15);color:var(--saffron);border:1px solid rgba(255,117,24,.3);}
+.btn-sm{padding:4px 10px;font-size:11px;}
+
+.filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+.filter-bar input,.filter-bar select{background:var(--card);border:1px solid var(--border);color:var(--text);padding:7px 11px;border-radius:4px;font-family:'Syne',sans-serif;font-size:12px;outline:none;}
+.filter-bar input{flex:1;min-width:150px;}.filter-bar input:focus,.filter-bar select:focus{border-color:var(--cyan);}
+.filter-bar select{cursor:pointer;}.filter-bar select option{background:var(--card);}
+
+/* ── Stats grid ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:11px;margin-bottom:20px;}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:15px;position:relative;overflow:hidden;}
+.stat::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.stat.c1::before{background:var(--cyan);}.stat.c2::before{background:var(--red);}
+.stat.c3::before{background:var(--saffron);}.stat.c4::before{background:var(--gold);}
+.stat.c5::before{background:var(--green);}.stat.c6::before{background:var(--purple);}
+.stat-label{font-size:9px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:6px;}
+.stat-val{font-size:26px;font-weight:800;line-height:1;}
+.stat.c1 .stat-val{color:var(--cyan);}.stat.c2 .stat-val{color:var(--red);}
+.stat.c3 .stat-val{color:var(--saffron);}.stat.c4 .stat-val{color:var(--gold);}
+.stat.c5 .stat-val{color:var(--green);}.stat.c6 .stat-val{color:var(--purple);}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:3px;}
+
+/* ── Dashboard layout ── */
+.dash-row{display:grid;gap:14px;margin-bottom:14px;}
+.dash-row.cols-3{grid-template-columns:1fr 1fr 1fr;}
+.dash-row.cols-2{grid-template-columns:2fr 1fr;}
+.dash-row.cols-1{grid-template-columns:1fr;}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);}
+.card-title{font-size:13px;font-weight:700;}
+.card-meta{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;}
+
+/* ── Alert bar ── */
+.alert-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:12px;border-left:3px solid var(--red);background:rgba(255,69,69,.06);color:var(--text);}
+.alert-bar.ok{border-left-color:var(--green);background:rgba(0,212,138,.06);}
+.alert-bar.warn{border-left-color:var(--gold);background:rgba(255,193,7,.06);}
+
+/* ── Activity feed ── */
+.feed-item{display:flex;align-items:flex-start;gap:10px;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,.03);font-size:12px;}
+.feed-item:last-child{border-bottom:none;}
+.feed-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+.feed-dot.critical{background:var(--red);box-shadow:0 0 5px var(--red);}
+.feed-dot.high{background:var(--saffron);}
+.feed-dot.medium{background:var(--gold);}
+.feed-dot.resolved{background:var(--green);}
+.feed-dot.scan{background:var(--cyan);}
+.feed-time{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap;margin-top:1px;}
+
+/* ── Severity ring chart ── */
+.sev-rings{display:flex;flex-direction:column;gap:8px;padding:14px 16px;}
+.sev-row{display:flex;align-items:center;gap:10px;}
+.sev-label{font-size:11px;font-weight:700;width:70px;flex-shrink:0;}
+.sev-bar-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.sev-bar-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+.sev-count{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);width:30px;text-align:right;}
+
+/* ── Tables ── */
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+th{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--muted);padding:9px 13px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:8px 13px;font-size:12px;border-bottom:1px solid rgba(255,255,255,.03);}
+tr:last-child td{border-bottom:none;}
+tr.clickable{cursor:pointer;}tr.clickable:hover td{background:rgba(0,200,212,.04);}
+
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;font-family:'Space Mono',monospace;white-space:nowrap;}
+.b-CRITICAL,.b-EMERGENCY{background:rgba(255,69,69,.15);color:var(--red);border:1px solid rgba(255,69,69,.3);}
+.b-HIGH,.b-ESCALATED{background:rgba(255,117,24,.15);color:var(--saffron);border:1px solid rgba(255,117,24,.3);}
+.b-MEDIUM,.b-CONFIRMED{background:rgba(255,193,7,.15);color:var(--gold);border:1px solid rgba(255,193,7,.3);}
+.b-LOW,.b-PENDING,.b-INACTIVE,.b-SKIPPED{background:rgba(90,122,154,.12);color:var(--muted);border:1px solid rgba(90,122,154,.25);}
+.b-NEW,.b-ACTIVE,.b-RUNNING{background:rgba(0,200,212,.1);color:var(--cyan);border:1px solid rgba(0,200,212,.2);}
+.b-RESOLVED,.b-COMPLETED{background:rgba(0,212,138,.1);color:var(--green);border:1px solid rgba(0,212,138,.2);}
+.b-FALSE_POSITIVE,.b-FAILED{background:rgba(90,122,154,.08);color:var(--muted);border:1px solid rgba(90,122,154,.2);}
+
+.pager{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--border);}
+.pager-info{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;}
+.pager-btns{display:flex;gap:4px;}
+.pager-btn{background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:3px;font-size:11px;cursor:pointer;font-family:'Space Mono',monospace;}
+.pager-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+.pager-btn.active{background:var(--cyan);color:var(--navy);border-color:var(--cyan);}
+.pager-btn:disabled{opacity:.3;cursor:not-allowed;}
+
+.page{display:none;}.page.active{display:block;}
+.loading{text-align:center;padding:32px;color:var(--muted);font-family:'Space Mono',monospace;font-size:11px;}
+.spin{display:inline-block;width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:40px;color:var(--muted);}
+.empty-icon{font-size:30px;margin-bottom:8px;}.empty-text{font-size:12px;line-height:1.8;}
+.toast{position:fixed;bottom:18px;right:18px;background:var(--navy2);border-radius:6px;padding:11px 16px;font-size:12px;z-index:9999;opacity:0;transition:opacity .25s;border:1px solid var(--cyan);max-width:320px;pointer-events:none;}
+.toast.show{opacity:1;}
+
+/* ── Modals ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow-y:auto;backdrop-filter:blur(4px);}
+.modal-bg.hidden{display:none;}
+.modal{background:var(--navy2);border:1px solid var(--border);border-radius:10px;width:100%;max-width:880px;margin:auto;}
+.modal.wide{max-width:980px;}
+.modal-head{display:flex;align-items:flex-start;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);}
+.modal-title{font-size:15px;font-weight:700;line-height:1.4;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:19px;cursor:pointer;padding:2px 6px;border-radius:3px;line-height:1;}.modal-close:hover{background:rgba(255,255,255,.08);color:var(--text);}
+.modal-body{padding:18px 20px;}
+.modal-foot{display:flex;gap:8px;flex-wrap:wrap;padding:13px 20px;border-top:1px solid var(--border);background:rgba(0,0,0,.15);border-radius:0 0 10px 10px;}
+
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.dbox{background:var(--navy);border:1px solid var(--border);border-radius:5px;padding:11px 13px;}
+.dbox.span2{grid-column:1/-1;}
+.dlabel{font-size:9px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:4px;}
+.dval{font-size:12px;font-weight:600;word-break:break-all;line-height:1.5;}
+.dval a{color:var(--cyan);text-decoration:none;}.dval a:hover{text-decoration:underline;}
+
+.poc-box{background:#040b15;border:1px solid var(--border);border-radius:6px;padding:13px;margin-bottom:13px;}
+.poc-label{font-size:9px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:9px;display:flex;justify-content:space-between;}
+.poc-warn{color:var(--red);font-size:9px;}
+.poc-content{font-family:'Space Mono',monospace;font-size:11px;line-height:1.7;white-space:pre-wrap;word-break:break-all;color:#b8d4f0;max-height:360px;overflow-y:auto;}
+.poc-content::-webkit-scrollbar{width:4px;}.poc-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+.sla-wrap{background:var(--navy);border:1px solid var(--border);border-radius:5px;padding:11px 13px;margin-bottom:13px;}
+.sla-track{height:4px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden;}
+.sla-fill{height:100%;border-radius:2px;transition:width .3s;}
+
+.conf-wrap{display:flex;align-items:center;gap:7px;}
+.conf-track{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+.conf-fill{height:100%;border-radius:2px;}
+
+.signal-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;}
+.signal{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:'Space Mono',monospace;padding:3px 7px;border-radius:3px;border:1px solid var(--border);color:var(--muted);}
+.signal.on{border-color:rgba(0,212,138,.3);color:var(--green);background:rgba(0,212,138,.06);}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media(max-width:1100px){.two-col,.dash-row.cols-3,.dash-row.cols-2{grid-template-columns:1fr;}.detail-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-name"><span class="logo-c">Cyber</span><span class="logo-d">Drishti</span></div>
+    <div class="logo-sub">साइबर दृष्टि · CERT-IN</div>
+    <div class="logo-badge">RESTRICTED · DEV MODE</div>
+  </div>
+  <nav>
+    <div class="nav-label">MONITOR</div>
+    <div class="nav-item active" data-page="dashboard" onclick="nav(this)"><span class="nav-icon">🏠</span>Dashboard</div>
+    <div class="nav-item" data-page="domains"  onclick="nav(this)"><span class="nav-icon">🌐</span>Domain Corpus</div>
+    <div class="nav-item" data-page="findings" onclick="nav(this)"><span class="nav-icon">⚠️</span>Findings</div>
+    <div class="nav-item" data-page="jobs"     onclick="nav(this)"><span class="nav-icon">⚙️</span>Scan Jobs</div>
+    <div class="nav-item" data-page="audit"    onclick="nav(this)"><span class="nav-icon">📋</span>Audit Log</div>
+    <div class="nav-label">SCANNER</div>
+    <div class="nav-item" onclick="triggerCorpus()"><span class="nav-icon">📡</span>Refresh Corpus</div>
+    <div class="nav-item" onclick="triggerScanAll()"><span class="nav-icon">🔍</span>Scan Pending</div>
+  </nav>
+  <div class="status-dock" id="statusDock">
+    <div class="status-row"><div class="dot warn"></div>Checking API...</div>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="pageTitle">Dashboard</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="clock" id="clock"></div>
+      <button class="btn btn-ghost btn-sm" onclick="reload()">↺ Refresh</button>
+    </div>
+  </div>
+  <div class="content">
+
+  <!-- ══════════════════════════════════════════════════
+       DASHBOARD
+  ══════════════════════════════════════════════════ -->
+  <div class="page active" id="page-dashboard">
+
+    <!-- Alert banner (shown when there are critical open findings) -->
+    <div id="dashAlert" style="display:none"></div>
+
+    <!-- Stat cards -->
+    <div class="stats-grid" id="statsGrid"><div class="loading"><span class="spin"></span>Loading...</div></div>
+
+    <!-- Row 1: Severity breakdown + recent scans + scan rate -->
+    <div class="dash-row cols-3">
+      <div class="card">
+        <div class="card-head"><div class="card-title">📊 Open Findings by Severity</div></div>
+        <div id="sevChart"><div class="loading"><span class="spin"></span></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">🔄 Recent Scans</div><button class="btn btn-cyan btn-sm" onclick="triggerScanAll()">▶ Scan All</button></div>
+        <div id="dashScans"><div class="loading"><span class="spin"></span></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">🏛️ Findings by Sector</div></div>
+        <div id="dashSector"><div class="loading"><span class="spin"></span></div></div>
+      </div>
+    </div>
+
+    <!-- Row 2: Critical findings list + activity feed -->
+    <div class="dash-row cols-2">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">🔴 Critical & High — Open Findings</div>
+          <button class="btn btn-ghost btn-sm" onclick="nav(document.querySelector('[data-page=findings]'));document.getElementById('findingSev').value='CRITICAL';loadFindings()">View All →</button>
+        </div>
+        <div id="criticalFindings"><div class="loading"><span class="spin"></span></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">📡 Recent Activity</div></div>
+        <div id="activityFeed"><div class="loading"><span class="spin"></span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
+       DOMAINS
+  ══════════════════════════════════════════════════ -->
+  <div class="page" id="page-domains">
+    <div class="filter-bar">
+      <input id="domainSearch" placeholder="🔍 Search domain..." oninput="debounce(loadDomains,400)">
+      <select id="domainStatus" onchange="loadDomains()"><option value="">All Status</option><option>ACTIVE</option><option>INACTIVE</option><option>PENDING</option></select>
+      <select id="domainSector" onchange="loadDomains()"><option value="">All Sectors</option><option>GOVERNMENT</option><option>EDUCATION</option><option>RESEARCH</option><option>DEFENCE</option></select>
+      <select id="domainTLD" onchange="loadDomains()"><option value="">All TLDs</option><option>.gov.in</option><option>.nic.in</option><option>.edu.in</option><option>.ac.in</option><option>.res.in</option></select>
+      <select id="domainHasFindings" onchange="loadDomains()"><option value="">Any</option><option value="true">Has Findings</option><option value="false">No Findings</option></select>
+      <button class="btn btn-cyan btn-sm" onclick="openAddDomain()">+ Add Domain</button>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">🌐 Domain Corpus</div><div class="card-meta" id="domainMeta"></div></div>
+      <div class="tbl-wrap" id="domainsTbl"><div class="loading"><span class="spin"></span>Loading...</div></div>
+      <div id="domainPager"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
+       FINDINGS
+  ══════════════════════════════════════════════════ -->
+  <div class="page" id="page-findings">
+    <div class="filter-bar">
+      <input id="findingSearch" placeholder="🔍 Search URL, type, domain..." oninput="debounce(loadFindings,400)">
+      <select id="findingSev" onchange="loadFindings()"><option value="">All Severities</option><option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
+      <select id="findingStatus" onchange="loadFindings()"><option value="">All Statuses</option><option>NEW</option><option>CONFIRMED</option><option>ESCALATED</option><option>RESOLVED</option><option>FALSE_POSITIVE</option></select>
+      <select id="findingEntity" onchange="loadFindings()">
+        <option value="">All Types</option>
+        <option>ENV_FILE</option><option>GIT_REPO</option><option>PRIVATE_KEY</option><option>DATABASE_DUMP</option>
+        <option>CONFIG_FILE</option><option>ADMIN_PANEL</option><option>CLOUD_METADATA</option><option>KUBE_CONFIG</option>
+        <option>SPRING_BOOT</option><option>MEMORY_DUMP</option><option>SHELL_HISTORY</option>
+        <option>AADHAAR</option><option>PAN</option><option>VOTER_ID</option><option>CREDIT_CARD</option>
+        <option>BANK_ACCOUNT</option><option>PASSPORT</option><option>AWS_KEY</option><option>STRIPE_KEY</option>
+        <option>OPEN_DIRECTORY</option><option>OTHER</option>
+      </select>
+      <select id="findingSort" onchange="loadFindings()">
+        <option value="created_desc">Newest First</option>
+        <option value="severity_desc">Severity</option>
+        <option value="confidence_desc">Confidence</option>
+        <option value="sla_asc">SLA Soonest</option>
+      </select>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">⚠️ Findings</div><div class="card-meta" id="findingMeta">Click row for PoC</div></div>
+      <div class="tbl-wrap" id="findingsTbl"><div class="loading"><span class="spin"></span>Loading...</div></div>
+      <div id="findingPager"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
+       SCAN JOBS
+  ══════════════════════════════════════════════════ -->
+  <div class="page" id="page-jobs">
+    <div class="filter-bar">
+      <input id="jobSearch" placeholder="🔍 Search domain..." oninput="debounce(loadJobs,400)">
+      <select id="jobStatus" onchange="loadJobs()"><option value="">All Statuses</option><option>RUNNING</option><option>COMPLETED</option><option>FAILED</option><option>SKIPPED</option></select>
+      <button class="btn btn-cyan btn-sm" onclick="triggerScanAll()">▶ Scan Pending</button>
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">⚙️ Scan Jobs</div><div class="card-meta" id="jobMeta"></div></div>
+      <div class="tbl-wrap" id="jobsTbl"><div class="loading"><span class="spin"></span>Loading...</div></div>
+      <div id="jobPager"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
+       AUDIT LOG
+  ══════════════════════════════════════════════════ -->
+  <div class="page" id="page-audit">
+    <div class="filter-bar">
+      <input id="auditEvent" placeholder="🔍 Filter by event type..." oninput="debounce(loadAudit,400)">
+      <input id="auditActor" placeholder="Filter by actor..." oninput="debounce(loadAudit,400)" style="max-width:180px;">
+    </div>
+    <div class="card">
+      <div class="card-head"><div class="card-title">📋 Audit Log</div><div class="card-meta" id="auditMeta"></div></div>
+      <div class="tbl-wrap" id="auditTbl"><div class="loading"><span class="spin"></span>Loading...</div></div>
+      <div id="auditPager"></div>
+    </div>
+  </div>
+
+  </div><!-- /content -->
+</div>
+
+<!-- ═══════════════════════════════════════ FINDING MODAL ═════ -->
+<div class="modal-bg hidden" id="findingModal" onclick="if(event.target===this)closeModal('findingModal')">
+  <div class="modal">
+    <div class="modal-head">
+      <div><div class="modal-title" id="fmTitle">Finding</div><div style="display:flex;gap:5px;margin-top:5px;" id="fmBadges"></div></div>
+      <button class="modal-close" onclick="closeModal('findingModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid" id="fmGrid"></div>
+      <div id="fmSLA"></div>
+      <div class="poc-box">
+        <div class="poc-label"><span>🔍 RAW EVIDENCE — PROOF OF CONCEPT</span><span class="poc-warn">⚠ CERT-IN INTERNAL</span></div>
+        <div class="poc-content" id="fmPoc">Loading...</div>
+      </div>
+    </div>
+    <div class="modal-foot" id="fmActions"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ DOMAIN MODAL ══════ -->
+<div class="modal-bg hidden" id="domainModal" onclick="if(event.target===this)closeModal('domainModal')">
+  <div class="modal wide">
+    <div class="modal-head">
+      <div><div class="modal-title" id="dmTitle">Domain</div><div style="display:flex;gap:5px;margin-top:5px;" id="dmBadges"></div></div>
+      <button class="modal-close" onclick="closeModal('domainModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid" id="dmGrid"></div>
+      <div id="dmSignals" style="margin-bottom:13px;"></div>
+      <div class="card" style="margin-bottom:13px;">
+        <div class="card-head"><div class="card-title">⚠️ Findings</div><div class="card-meta" id="dmFCount"></div></div>
+        <div class="tbl-wrap" id="dmFTable"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">⚙️ Recent Jobs</div></div>
+        <div class="tbl-wrap" id="dmJTable"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-cyan btn-sm" id="dmScanBtn">▶ Scan Now</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('domainModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ ADD DOMAIN MODAL ══ -->
+<div class="modal-bg hidden" id="addModal" onclick="if(event.target===this)closeModal('addModal')">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-head"><div class="modal-title">Add Domain</div><button class="modal-close" onclick="closeModal('addModal')">✕</button></div>
+    <div class="modal-body">
+      <div style="margin-bottom:10px;font-size:12px;color:var(--muted);">Domain will be queued for discovery and scanning.</div>
+      <input id="addInput" style="width:100%;background:var(--navy);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:4px;font-size:13px;font-family:'Syne',sans-serif;outline:none;" placeholder="example.gov.in" onkeydown="if(event.key==='Enter')submitAdd()">
+    </div>
+    <div class="modal-foot"><button class="btn btn-cyan" onclick="submitAdd()">+ Add</button><button class="btn btn-ghost" onclick="closeModal('addModal')">Cancel</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+const API='http://localhost:8000';
+const PER=25;
+let cur='dashboard';
+let pages={domains:1,findings:1,jobs:1,audit:1};
+let dbt={};
+
+// ── Utilities ────────────────────────────────────────────────
+function debounce(fn,ms,k='d'){clearTimeout(dbt[k]);dbt[k]=setTimeout(fn,ms);}
+function toast(msg,type='info'){
+  const el=document.getElementById('toast');
+  el.style.borderColor={info:'var(--cyan)',success:'var(--green)',error:'var(--red)',warn:'var(--gold)'}[type];
+  el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3500);
+}
+function badge(v){return `<span class="badge b-${v}">${v}</span>`;}
+function mono(t){return `<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">${t||'—'}</span>`;}
+function fmtD(iso){return iso?new Date(iso).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}):'—';}
+function fmtDur(ms){if(!ms)return '—';return ms>60000?`${(ms/60000).toFixed(1)}m`:`${ms}ms`;}
+function fmtSize(b){if(!b)return '—';return b>1048576?`${(b/1048576).toFixed(1)}MB`:b>1024?`${(b/1024).toFixed(0)}KB`:`${b}B`;}
+function tick(){document.getElementById('clock').textContent=new Date().toUTCString().slice(0,-4)+' IST';}
+setInterval(tick,1000);tick();
+
+// ── Nav ──────────────────────────────────────────────────────
+function nav(el){
+  const page=el.dataset.page;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item[data-page]').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  el.classList.add('active');cur=page;
+  document.getElementById('pageTitle').textContent={dashboard:'Dashboard',domains:'Domain Corpus',findings:'Findings',jobs:'Scan Jobs',audit:'Audit Log'}[page]||page;
+  loadPage(page);
+}
+function reload(){loadPage(cur);}
+function loadPage(p){
+  if(p==='dashboard')loadDashboard();
+  else if(p==='domains')loadDomains();
+  else if(p==='findings')loadFindings();
+  else if(p==='jobs')loadJobs();
+  else if(p==='audit')loadAudit();
+}
+
+// ── API ──────────────────────────────────────────────────────
+async function apiFetch(path){
+  try{const r=await fetch(API+path);if(!r.ok)throw new Error(r.status);return await r.json();}catch(e){console.error(path,e);return null;}
+}
+async function apiPost(path){try{const r=await fetch(API+path,{method:'POST'});return await r.json();}catch(e){return null;}}
+async function apiPatch(path){try{const r=await fetch(API+path,{method:'PATCH'});return await r.json();}catch(e){return null;}}
+
+// ── Status ───────────────────────────────────────────────────
+async function checkStatus(){
+  const d=await apiFetch('/api/health');
+  const dock=document.getElementById('statusDock');
+  if(d?.status==='healthy'){
+    dock.innerHTML=`<div class="status-row"><div class="dot ok"></div>API Online</div><div class="status-row"><div class="dot ok"></div>DB Connected</div><div style="font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:3px">v${d.version||'1.0'} · ${(new Date(d.timestamp)).toLocaleTimeString('en-IN')}</div>`;
+  }else{
+    dock.innerHTML=`<div class="status-row"><div class="dot err"></div>API Offline</div><div style="font-size:10px;color:var(--muted);margin-top:3px">docker compose up</div>`;
+  }
+}
+setInterval(checkStatus,30000);checkStatus();
+
+// ── Pagination ────────────────────────────────────────────────
+function buildPager(id,p,total,per,fn){
+  const tp=Math.ceil(total/per);
+  if(tp<=1){document.getElementById(id).innerHTML='';return;}
+  const from=(p-1)*per+1,to=Math.min(p*per,total);
+  let b=`<button class="pager-btn" onclick="${fn}(${p-1})" ${p===1?'disabled':''}>← Prev</button>`;
+  let s=Math.max(1,p-2),e=Math.min(tp,p+2);
+  if(s>1)b+=`<button class="pager-btn" onclick="${fn}(1)">1</button>${s>2?'<span style="color:var(--muted);padding:0 3px">…</span>':''}`;
+  for(let i=s;i<=e;i++)b+=`<button class="pager-btn ${i===p?'active':''}" onclick="${fn}(${i})">${i}</button>`;
+  if(e<tp)b+=`${e<tp-1?'<span style="color:var(--muted);padding:0 3px">…</span>':''}<button class="pager-btn" onclick="${fn}(${tp})">${tp}</button>`;
+  b+=`<button class="pager-btn" onclick="${fn}(${p+1})" ${p===tp?'disabled':''}>Next →</button>`;
+  document.getElementById(id).innerHTML=`<div class="pager"><div class="pager-info">Showing ${from}–${to} of ${total}</div><div class="pager-btns">${b}</div></div>`;
+}
+
+// ══════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════
+async function loadDashboard(){
+  const d=await apiFetch('/api/dashboard');
+  if(!d){
+    document.getElementById('statsGrid').innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="empty-icon">❌</div><div class="empty-text">Cannot reach API.<br>Run: <strong>docker compose up</strong></div></div>`;
+    return;
+  }
+  const s=d.summary;
+
+  // Alert bar
+  const alertEl=document.getElementById('dashAlert');
+  if(s.open_critical>0){
+    alertEl.style.display='flex';
+    alertEl.className='alert-bar';
+    alertEl.innerHTML=`🚨 <strong>${s.open_critical} CRITICAL</strong> exposure(s) open — SLA due within 24 hours. Immediate action required.`;
+  } else if(s.open_high>0){
+    alertEl.style.display='flex';
+    alertEl.className='alert-bar warn';
+    alertEl.innerHTML=`⚠️ <strong>${s.open_high} HIGH</strong> severity finding(s) open — SLA due within 72 hours.`;
+  } else {
+    alertEl.style.display='none';
+  }
+
+  // Stats
+  document.getElementById('statsGrid').innerHTML=`
+    <div class="stat c1"><div class="stat-label">DOMAINS</div><div class="stat-val">${s.total_domains}</div><div class="stat-sub">${s.active_domains} active</div></div>
+    <div class="stat c2"><div class="stat-label">CRITICAL OPEN</div><div class="stat-val">${s.open_critical}</div><div class="stat-sub">24h SLA</div></div>
+    <div class="stat c3"><div class="stat-label">HIGH OPEN</div><div class="stat-val">${s.open_high}</div><div class="stat-sub">72h SLA</div></div>
+    <div class="stat c4"><div class="stat-label">MEDIUM OPEN</div><div class="stat-val">${s.open_medium}</div><div class="stat-sub">7-day SLA</div></div>
+    <div class="stat c5"><div class="stat-label">RESOLVED</div><div class="stat-val">${s.resolved_findings}</div><div class="stat-sub">closed</div></div>
+    <div class="stat c6"><div class="stat-label">TOTAL</div><div class="stat-val">${s.total_findings}</div><div class="stat-sub">all findings</div></div>`;
+
+  // Severity chart
+  const sev=d.findings_by_severity||{};
+  const sevOrder=['CRITICAL','HIGH','MEDIUM','LOW'];
+  const maxSev=Math.max(...Object.values(sev),1);
+  const sevColors={CRITICAL:'var(--red)',HIGH:'var(--saffron)',MEDIUM:'var(--gold)',LOW:'var(--muted)'};
+  document.getElementById('sevChart').innerHTML=`<div class="sev-rings">${
+    sevOrder.map(sv=>`<div class="sev-row">
+      <div class="sev-label" style="color:${sevColors[sv]}">${sv}</div>
+      <div class="sev-bar-track"><div class="sev-bar-fill" style="width:${Math.round((sev[sv]||0)/maxSev*100)}%;background:${sevColors[sv]}"></div></div>
+      <div class="sev-count">${sev[sv]||0}</div>
+    </div>`).join('')}
+    <div style="padding:8px 0 2px;font-size:10px;color:var(--muted);border-top:1px solid var(--border);margin-top:4px;">
+      Total open: <strong style="color:var(--text)">${(s.open_critical+s.open_high+s.open_medium)}</strong>
+      &nbsp;·&nbsp; False positive: <strong style="color:var(--text)">${sev.FALSE_POSITIVE||0}</strong>
+    </div></div>`;
+
+  // Recent scans
+  const scans=d.recent_scans||[];
+  document.getElementById('dashScans').innerHTML=scans.length
+    ?`<table><thead><tr><th>DOMAIN</th><th>STATUS</th><th>FINDINGS</th><th>TIME</th></tr></thead><tbody>
+      ${scans.map(s=>`<tr><td style="font-family:'Space Mono',monospace;font-size:10px">${s.domain}</td><td>${badge(s.status)}</td>
+      <td style="font-weight:700;color:${s.findings>0?'var(--saffron)':'inherit'}">${s.findings||0}</td>
+      <td>${mono(fmtDur(s.duration_ms))}</td></tr>`).join('')}
+      </tbody></table>`
+    :`<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No scans yet.<br>Click Refresh Corpus.</div></div>`;
+
+  // Sector
+  const sec=d.findings_by_sector||{};
+  const secKeys=Object.keys(sec);
+  document.getElementById('dashSector').innerHTML=secKeys.length
+    ?`<table><thead><tr><th>SECTOR</th><th>FINDINGS</th></tr></thead><tbody>
+      ${secKeys.map(k=>`<tr><td style="font-size:12px">${k}</td><td style="font-weight:700;color:var(--saffron)">${sec[k]}</td></tr>`).join('')}
+      </tbody></table>`
+    :`<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">No sector data yet.</div></div>`;
+
+  // Critical / High open findings preview
+  const cf=await apiFetch('/api/findings?per_page=8&status=NEW&sort=severity_desc');
+  if(cf?.findings?.length){
+    document.getElementById('criticalFindings').innerHTML=`<table>
+      <thead><tr><th>DOMAIN</th><th>TYPE</th><th>SEVERITY</th><th>CONF</th><th></th></tr></thead>
+      <tbody>${cf.findings.filter(f=>['CRITICAL','HIGH'].includes(f.severity)).slice(0,6).map(f=>`
+        <tr class="clickable" onclick="openFinding('${f.id}')">
+          <td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--cyan)">${f.domain}</td>
+          <td style="font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.finding_type.replace(/_/g,' ')}</td>
+          <td>${badge(f.severity)}</td>
+          <td>${mono((f.confidence*100).toFixed(0)+'%')}</td>
+          <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openFinding('${f.id}')">PoC</button></td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  } else {
+    document.getElementById('criticalFindings').innerHTML=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">No critical/high open findings.</div></div>`;
+  }
+
+  // Activity feed from audit log
+  const al=await apiFetch('/api/audit?per_page=8');
+  if(al?.logs?.length){
+    const iconMap={'FINDING_CREATED':'critical','FINDING_STATUS_UPDATED':'resolved','SCAN_COMPLETED':'scan','CORPUS_REFRESH':'scan','RESCAN_TRIGGERED':'scan'};
+    document.getElementById('activityFeed').innerHTML=al.logs.map(l=>{
+      const cls=iconMap[l.event_type]||'scan';
+      const detail=l.details?Object.entries(l.details).filter(([k])=>['severity','domain','finding_type','new_status'].includes(k)).map(([k,v])=>`${v}`).join(' · '):'';
+      return `<div class="feed-item"><div class="feed-dot ${cls}"></div>
+        <div style="flex:1"><div style="font-size:11px;font-weight:600">${l.event_type.replace(/_/g,' ')}</div>${detail?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${detail}</div>`:''}</div>
+        <div class="feed-time">${fmtD(l.timestamp)}</div></div>`;
+    }).join('');
+  } else {
+    document.getElementById('activityFeed').innerHTML=`<div class="empty" style="padding:20px"><div class="empty-text">No activity yet.</div></div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════
+// DOMAINS
+// ══════════════════════════════════════════════════
+async function loadDomains(p){
+  if(p!==undefined)pages.domains=p;
+  const qs=new URLSearchParams({page:pages.domains,per_page:PER});
+  const s=document.getElementById('domainSearch')?.value||'';
+  const st=document.getElementById('domainStatus')?.value||'';
+  const sec=document.getElementById('domainSector')?.value||'';
+  const tld=document.getElementById('domainTLD')?.value||'';
+  const hf=document.getElementById('domainHasFindings')?.value||'';
+  if(s)qs.set('search',s);if(st)qs.set('status',st);if(sec)qs.set('sector',sec);
+  if(tld)qs.set('tld',tld);if(hf)qs.set('has_findings',hf);
+
+  document.getElementById('domainsTbl').innerHTML=`<div class="loading"><span class="spin"></span>Loading...</div>`;
+  const d=await apiFetch('/api/domains?'+qs);
+  if(!d){document.getElementById('domainsTbl').innerHTML=`<div class="empty"><div class="empty-icon">❌</div></div>`;return;}
+  document.getElementById('domainMeta').textContent=`${d.total} total`;
+  if(!d.domains?.length){document.getElementById('domainsTbl').innerHTML=`<div class="empty"><div class="empty-icon">🌐</div><div class="empty-text">No domains found.</div></div>`;document.getElementById('domainPager').innerHTML='';return;}
+  document.getElementById('domainsTbl').innerHTML=`<table>
+    <thead><tr><th>DOMAIN</th><th>TLD</th><th>SECTOR</th><th>IOCS</th><th>STATUS</th><th>IP</th><th>LAST SCAN</th><th>SCANS</th><th>FINDINGS</th><th>ACTIONS</th></tr></thead>
+    <tbody>${d.domains.map(dm=>`<tr class="clickable" onclick="openDomain('${dm.id}')">
+      <td style="font-family:'Space Mono',monospace;font-size:11px;color:var(--cyan)">${dm.domain}</td>
+      <td>${mono(dm.tld||'—')}</td><td style="font-size:11px">${dm.sector||'—'}</td>
+      <td><strong style="color:${dm.iocs_score>=80?'var(--green)':dm.iocs_score>=50?'var(--gold)':'var(--muted)'}">${dm.iocs_score}</strong></td>
+      <td>${badge(dm.status||'PENDING')}</td>
+      <td>${mono(dm.ip_address||'—')}</td>
+      <td>${mono(fmtD(dm.last_scanned_at))}</td>
+      <td style="text-align:center">${dm.scan_count||0}</td>
+      <td style="font-weight:700;color:${dm.findings_count>0?'var(--saffron)':'var(--muted)'}">${dm.findings_count}</td>
+      <td onclick="event.stopPropagation()"><button class="btn btn-ghost btn-sm" onclick="scanDomainById('${dm.id}','${dm.domain}')">▶ Scan</button></td>
+    </tr>`).join('')}</tbody></table>`;
+  buildPager('domainPager',pages.domains,d.total,PER,'loadDomains');
+}
+
+async function openDomain(id){
+  closeModal('findingModal');
+  document.getElementById('domainModal').classList.remove('hidden');
+  document.getElementById('dmTitle').textContent='Loading...';
+  document.getElementById('dmBadges').innerHTML='';
+  document.getElementById('dmGrid').innerHTML=`<div class="loading" style="grid-column:1/-1"><span class="spin"></span></div>`;
+  document.getElementById('dmSignals').innerHTML='';
+  document.getElementById('dmFTable').innerHTML=`<div class="loading"><span class="spin"></span></div>`;
+  document.getElementById('dmJTable').innerHTML=`<div class="loading"><span class="spin"></span></div>`;
+  const d=await apiFetch(`/api/domains/${id}`);
+  if(!d){document.getElementById('dmTitle').textContent='Error';return;}
+  document.getElementById('dmTitle').textContent=d.domain;
+  document.getElementById('dmBadges').innerHTML=`${badge(d.status||'PENDING')} ${badge(d.sector||'UNKNOWN')} <span class="badge" style="background:rgba(0,200,212,.1);color:var(--cyan)">IOCS ${d.iocs_score}</span>`;
+  document.getElementById('dmGrid').innerHTML=`
+    <div class="dbox"><div class="dlabel">IP ADDRESS</div><div class="dval">${d.ip_address||'Unknown'}</div></div>
+    <div class="dbox"><div class="dlabel">HOSTING / ASN</div><div class="dval">${d.hosting_provider||'—'}${d.asn?`<br>${mono(d.asn)}`:''}</div></div>
+    <div class="dbox"><div class="dlabel">DISCOVERED VIA</div><div class="dval">${d.discovered_via||'—'}</div></div>
+    <div class="dbox"><div class="dlabel">SCAN COUNT</div><div class="dval">${d.scan_count||0}</div></div>
+    <div class="dbox"><div class="dlabel">LAST SCANNED</div><div class="dval" style="font-size:11px">${fmtD(d.last_scanned_at)}</div></div>
+    <div class="dbox"><div class="dlabel">NEXT SCAN DUE</div><div class="dval" style="font-size:11px">${fmtD(d.next_scan_due_at)}</div></div>
+    <div class="dbox"><div class="dlabel">CDN</div><div class="dval">${d.cdn_detected||'—'}</div></div>
+    <div class="dbox"><div class="dlabel">ADDED</div><div class="dval" style="font-size:11px">${fmtD(d.created_at)}</div></div>
+    ${Object.keys(d.findings_summary||{}).length?`<div class="dbox span2"><div class="dlabel">FINDINGS BREAKDOWN</div><div class="dval" style="display:flex;gap:7px;flex-wrap:wrap;margin-top:4px">${Object.entries(d.findings_summary).map(([sv,c])=>`${badge(sv)} ×${c}`).join(' ')}</div></div>`:''}`;
+  const sig=d.signals||{};
+  const sigs=[['whois_in','WHOIS India'],['ip_in','IP India'],['payment_gw','Payment GW'],['gst_number','GST'],['lang_in','Hindi/Regional'],['registry','Gov Registry']];
+  document.getElementById('dmSignals').innerHTML=`<div style="font-size:9px;font-family:'Space Mono',monospace;letter-spacing:2px;color:var(--muted);margin-bottom:5px">IOCS SIGNALS</div><div class="signal-row">${sigs.map(([k,l])=>`<span class="signal ${sig[k]?'on':''}">${sig[k]?'✓':'○'} ${l}</span>`).join('')}</div>`;
+  document.getElementById('dmFCount').textContent=`${d.findings?.length||0} findings`;
+  if(d.findings?.length){
+    document.getElementById('dmFTable').innerHTML=`<table>
+      <thead><tr><th>SEV</th><th>TYPE</th><th>URL</th><th>STATUS</th><th>CONF</th><th>DETECTED</th><th></th></tr></thead>
+      <tbody>${d.findings.map(f=>`<tr class="clickable" onclick="closeModal('domainModal');openFinding('${f.id}')">
+        <td>${badge(f.severity)}</td>
+        <td style="font-size:10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.finding_type.replace(/_/g,' ')}</td>
+        <td style="font-family:'Space Mono',monospace;font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${f.url}">${f.url}</td>
+        <td>${badge(f.status)}</td>
+        <td>${mono((f.confidence*100).toFixed(0)+'%')}</td>
+        <td>${mono(fmtD(f.detected_at))}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();closeModal('domainModal');openFinding('${f.id}')">PoC</button></td>
+      </tr>`).join('')}</tbody></table>`;
+  }else{
+    document.getElementById('dmFTable').innerHTML=`<div class="empty" style="padding:18px"><div class="empty-text">No findings.</div></div>`;
+  }
+  if(d.recent_jobs?.length){
+    document.getElementById('dmJTable').innerHTML=`<table>
+      <thead><tr><th>TYPE</th><th>STATUS</th><th>URLS</th><th>FINDINGS</th><th>DURATION</th><th>COMPLETED</th></tr></thead>
+      <tbody>${d.recent_jobs.map(j=>`<tr><td style="font-size:11px">${j.type}</td><td>${badge(j.status)}</td><td>${j.urls_checked||0}</td>
+        <td style="font-weight:700;color:${j.findings_count>0?'var(--saffron)':'inherit'}">${j.findings_count||0}</td>
+        <td>${mono(fmtDur(j.duration_ms))}</td><td>${mono(fmtD(j.completed_at))}</td></tr>`).join('')}</tbody></table>`;
+  }else{
+    document.getElementById('dmJTable').innerHTML=`<div class="empty" style="padding:14px"><div class="empty-text">No jobs yet.</div></div>`;
+  }
+  document.getElementById('dmScanBtn').onclick=()=>scanDomainById(id,d.domain);
+}
+
+function openAddDomain(){document.getElementById('addModal').classList.remove('hidden');setTimeout(()=>document.getElementById('addInput').focus(),100);}
+async function submitAdd(){
+  const inp=document.getElementById('addInput');
+  const domain=inp.value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  if(!domain){toast('Enter a domain','warn');return;}
+  toast(`Submitting ${domain}...`);
+  const r=await apiPost(`/api/domains/add?domain=${encodeURIComponent(domain)}`);
+  if(r){toast(`${domain} queued`,'success');inp.value='';closeModal('addModal');setTimeout(loadDomains,800);}
+  else toast('Failed','error');
+}
+async function scanDomainById(id,name){
+  toast(`Scanning ${name}...`);
+  const r=await apiPost(`/api/domains/${id}/scan`);
+  if(r)toast(`Queued: ${name}`,'success');else toast('Failed','error');
+}
+
+// ══════════════════════════════════════════════════
+// FINDINGS
+// ══════════════════════════════════════════════════
+async function loadFindings(p){
+  if(p!==undefined)pages.findings=p;
+  const qs=new URLSearchParams({page:pages.findings,per_page:PER});
+  const s=document.getElementById('findingSearch')?.value||'';
+  const sv=document.getElementById('findingSev')?.value||'';
+  const st=document.getElementById('findingStatus')?.value||'';
+  const en=document.getElementById('findingEntity')?.value||'';
+  const so=document.getElementById('findingSort')?.value||'created_desc';
+  if(s)qs.set('search',s);if(sv)qs.set('severity',sv);if(st)qs.set('status',st);
+  if(en)qs.set('entity_type',en);qs.set('sort',so);
+  document.getElementById('findingsTbl').innerHTML=`<div class="loading"><span class="spin"></span>Loading...</div>`;
+  const d=await apiFetch('/api/findings?'+qs);
+  if(!d){document.getElementById('findingsTbl').innerHTML=`<div class="empty"><div class="empty-icon">❌</div></div>`;return;}
+  document.getElementById('findingMeta').textContent=`${d.total} total — click row for PoC`;
+  if(!d.findings?.length){document.getElementById('findingsTbl').innerHTML=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-text">No findings match filters.</div></div>`;document.getElementById('findingPager').innerHTML='';return;}
+  document.getElementById('findingsTbl').innerHTML=`<table>
+    <thead><tr><th>DOMAIN</th><th>TYPE</th><th>SEVERITY</th><th>STATUS</th><th>CONFIDENCE</th><th>SLA DUE</th><th>DETECTED</th></tr></thead>
+    <tbody>${d.findings.map(f=>{
+      const sla=f.sla_due?new Date(f.sla_due):null;
+      const overdue=sla&&sla<new Date()&&!['RESOLVED','FALSE_POSITIVE'].includes(f.status);
+      const conf=(f.confidence*100).toFixed(0);
+      return `<tr class="clickable" onclick="openFinding('${f.id}')">
+        <td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--cyan)">${f.domain}</td>
+        <td style="font-size:11px;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.finding_type.replace(/_/g,' ')}</td>
+        <td>${badge(f.severity)}</td><td>${badge(f.status)}</td>
+        <td><div class="conf-wrap"><div class="conf-track"><div class="conf-fill" style="width:${conf}%;background:${f.confidence>=.9?'var(--red)':f.confidence>=.7?'var(--saffron)':'var(--cyan)'}"></div></div>${mono(conf+'%')}</div></td>
+        <td style="font-family:'Space Mono',monospace;font-size:10px;color:${overdue?'var(--red)':'var(--muted)'}">${sla?sla.toLocaleDateString('en-IN'):'—'}${overdue?' ⚠':''}</td>
+        <td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">${fmtD(f.detected_at)}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+  buildPager('findingPager',pages.findings,d.total,PER,'loadFindings');
+}
+
+async function openFinding(id){
+  document.getElementById('findingModal').classList.remove('hidden');
+  ['fmGrid','fmSLA','fmActions'].forEach(el=>document.getElementById(el).innerHTML='');
+  document.getElementById('fmTitle').textContent='Loading...';
+  document.getElementById('fmBadges').innerHTML='';
+  document.getElementById('fmPoc').textContent='Loading...';
+  const f=await apiFetch(`/api/findings/${id}`);
+  if(!f){document.getElementById('fmTitle').textContent='Error';return;}
+  document.getElementById('fmTitle').textContent=f.finding_type.replace(/_/g,' ');
+  document.getElementById('fmBadges').innerHTML=`${badge(f.severity)} ${badge(f.status)} ${badge(f.entity_type)} ${f.dark_web_confirmed?'<span class="badge b-CRITICAL">🔴 DARK WEB</span>':''}`;
+  const sla=f.disclosure_sla_due?new Date(f.disclosure_sla_due):null;
+  if(sla){
+    const overdue=sla<new Date()&&!['RESOLVED','FALSE_POSITIVE'].includes(f.status);
+    const hLeft=Math.max(0,Math.floor((sla-new Date())/3600000));
+    const slaTtl={CRITICAL:24,HIGH:72,MEDIUM:168,LOW:720}[f.severity]||720;
+    const pct=overdue?100:Math.max(4,(1-hLeft/slaTtl)*100);
+    const sc=overdue?'var(--red)':hLeft<12?'var(--saffron)':'var(--green)';
+    document.getElementById('fmSLA').innerHTML=`<div class="sla-wrap"><div class="dlabel">DISCLOSURE SLA</div>
+      <div style="font-size:13px;font-weight:700;color:${sc};margin-top:3px">${overdue?'⚠ OVERDUE':'Due: '+sla.toLocaleString('en-IN')+' ('+hLeft+'h left)'}</div>
+      <div class="sla-track"><div class="sla-fill" style="width:${pct}%;background:${sc}"></div></div></div>`;
+  }
+  const conf=(f.final_confidence*100).toFixed(0);
+  document.getElementById('fmGrid').innerHTML=`
+    <div class="dbox span2"><div class="dlabel">URL</div><div class="dval"><a href="${f.url}" target="_blank" rel="noopener">${f.url}</a></div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">⚠ Passive observation only — do not interact per CERT-IN rules</div></div>
+    <div class="dbox"><div class="dlabel">HTTP STATUS</div><div class="dval" style="font-size:20px;font-weight:800;color:${f.http_status===200?'var(--green)':'var(--red)'}">${f.http_status||'—'}</div></div>
+    <div class="dbox"><div class="dlabel">CONFIDENCE</div><div class="dval" style="font-size:20px;font-weight:800;color:${f.final_confidence>=.9?'var(--red)':f.final_confidence>=.7?'var(--saffron)':'var(--gold)'}">${conf}%</div></div>
+    <div class="dbox"><div class="dlabel">CONTENT TYPE</div><div class="dval" style="font-size:11px">${f.content_type||'—'}</div></div>
+    <div class="dbox"><div class="dlabel">FILE SIZE</div><div class="dval">${fmtSize(f.file_size_bytes)}</div></div>
+    <div class="dbox"><div class="dlabel">DETECTED BY</div><div class="dval">${f.detected_by||'HEURISTIC'}</div></div>
+    <div class="dbox"><div class="dlabel">DETECTED AT</div><div class="dval" style="font-size:11px">${fmtD(f.detected_at)}</div></div>
+    ${f.reviewed_by?`<div class="dbox"><div class="dlabel">REVIEWED BY</div><div class="dval">${f.reviewed_by}</div></div>`:''}
+    ${f.false_positive_reason?`<div class="dbox span2"><div class="dlabel">FP REASON</div><div class="dval" style="color:var(--muted)">${f.false_positive_reason}</div></div>`:''}`;
+  document.getElementById('fmPoc').textContent=f.poc_evidence||'(No evidence captured — re-scan to collect)';
+  const open=!['RESOLVED','FALSE_POSITIVE'].includes(f.status);
+  document.getElementById('fmActions').innerHTML=`
+    ${open?`<button class="btn btn-green btn-sm" onclick="updateStatus('${id}','CONFIRMED')">✓ Confirm</button>`:''}
+    ${f.status==='CONFIRMED'?`<button class="btn btn-gold btn-sm" onclick="updateStatus('${id}','ESCALATED')">⬆ Escalate</button>`:''}
+    ${open?`<button class="btn btn-ghost btn-sm" onclick="promptFP('${id}')">✗ False Positive</button>`:''}
+    ${['CONFIRMED','ESCALATED'].includes(f.status)?`<button class="btn btn-ghost btn-sm" onclick="updateStatus('${id}','RESOLVED')">✓ Resolved</button>`:''}
+    <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${f.url}').then(()=>toast('URL copied','success'))">📋 URL</button>
+    <a href="${f.url}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">🔗 Open</a>
+    <button class="btn btn-ghost btn-sm" onclick="closeModal('findingModal');openDomain('${f.domain_id}')">🌐 Domain</button>`;
+}
+
+async function updateStatus(id,status){
+  const r=await apiPatch(`/api/findings/${id}/status?new_status=${status}&analyst=ANALYST`);
+  if(r){toast(`→ ${status}`,'success');openFinding(id);if(cur==='findings')loadFindings();if(cur==='dashboard')loadDashboard();}
+  else toast('Update failed','error');
+}
+function promptFP(id){
+  const reason=prompt('Reason for false positive (optional):');
+  if(reason===null)return;
+  apiPatch(`/api/findings/${id}/status?new_status=FALSE_POSITIVE&reason=${encodeURIComponent(reason||'')}&analyst=ANALYST`)
+    .then(r=>{if(r){toast('Marked as false positive','success');openFinding(id);if(cur==='findings')loadFindings();}});
+}
+
+// ══════════════════════════════════════════════════
+// JOBS  (with RESCAN button)
+// ══════════════════════════════════════════════════
+async function retryJob(jobId, domain){
+  if(!confirm(`Re-queue scan for ${domain}?`)) return;
+  toast(`Retrying ${domain}...`);
+  try{
+    const r = await fetch(`${API}/api/jobs/${jobId}/retry`, {method:'POST'});
+    const d = await r.json();
+    if(r.ok){ toast(`Retry queued: ${domain}`,'success'); setTimeout(loadJobs, 1000); }
+    else toast(`Retry failed: ${d.detail||'error'}`,'error');
+  }catch(e){ toast('API unreachable','error'); }
+}
+
+async function loadJobs(p){
+  if(p!==undefined)pages.jobs=p;
+  const qs=new URLSearchParams({page:pages.jobs,per_page:PER});
+  const s=document.getElementById('jobSearch')?.value||'';
+  const st=document.getElementById('jobStatus')?.value||'';
+  if(s)qs.set('domain',s);if(st)qs.set('status',st);
+  document.getElementById('jobsTbl').innerHTML=`<div class="loading"><span class="spin"></span>Loading...</div>`;
+  const d=await apiFetch('/api/jobs?'+qs);
+  if(!d){document.getElementById('jobsTbl').innerHTML=`<div class="empty"><div class="empty-icon">❌</div></div>`;return;}
+  document.getElementById('jobMeta').textContent=`${d.total} total`;
+  if(!d.jobs?.length){document.getElementById('jobsTbl').innerHTML=`<div class="empty"><div class="empty-icon">⚙️</div><div class="empty-text">No jobs found.</div></div>`;document.getElementById('jobPager').innerHTML='';return;}
+  document.getElementById('jobsTbl').innerHTML=`<table>
+    <thead><tr><th>DOMAIN</th><th>TYPE</th><th>STATUS</th><th>URLS</th><th>FINDINGS</th><th>DURATION</th><th>STARTED</th><th>COMPLETED</th><th>ERROR</th><th>ACTION</th></tr></thead>
+    <tbody>${d.jobs.map(j=>{
+      const canRescan=['FAILED','SKIPPED','COMPLETED'].includes(j.status);
+      return `<tr>
+        <td style="font-family:'Space Mono',monospace;font-size:10px">${j.domain||'—'}</td>
+        <td style="font-size:10px">${j.type}</td>
+        <td>${badge(j.status)}</td>
+        <td>${j.urls_checked||0}</td>
+        <td style="font-weight:700;color:${j.findings_count>0?'var(--saffron)':'inherit'}">${j.findings_count||0}</td>
+        <td>${mono(fmtDur(j.duration_ms))}</td>
+        <td>${mono(fmtD(j.started_at))}</td>
+        <td>${mono(fmtD(j.completed_at))}</td>
+        <td style="font-size:10px;color:${j.status==='FAILED'?'var(--red)':'var(--muted)'};max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${j.error_message||''}">${j.error_message||'—'}</td>
+        <td>${canRescan?`<button class="btn ${j.status==='FAILED'?'btn-red':j.status==='SKIPPED'?'btn-gold':'btn-ghost'} btn-sm" onclick="rescanJob('${j.id}','${j.domain}')">↺ Rescan</button>`:'—'}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+  buildPager('jobPager',pages.jobs,d.total,PER,'loadJobs');
+}
+
+async function rescanJob(jobId, domain){
+  toast(`Re-queuing scan for ${domain}...`);
+  try{
+    const r=await fetch(`${API}/api/jobs/${jobId}/retry`,{method:'POST'});
+    const d=await r.json();
+    if(r.ok){toast(`Retry queued: ${domain}`,'success');setTimeout(loadJobs,800);}
+    else toast(`Retry failed: ${d.detail||'error'}`,'error');
+  }catch(e){toast('API unreachable','error');}
+}
+
+// ══════════════════════════════════════════════════
+// AUDIT
+// ══════════════════════════════════════════════════
+async function loadAudit(p){
+  if(p!==undefined)pages.audit=p;
+  const qs=new URLSearchParams({page:pages.audit,per_page:PER});
+  const ev=document.getElementById('auditEvent')?.value||'';
+  const ac=document.getElementById('auditActor')?.value||'';
+  if(ev)qs.set('event_type',ev);if(ac)qs.set('actor',ac);
+  document.getElementById('auditTbl').innerHTML=`<div class="loading"><span class="spin"></span>Loading...</div>`;
+  const d=await apiFetch('/api/audit?'+qs);
+  if(!d){document.getElementById('auditTbl').innerHTML=`<div class="empty"><div class="empty-icon">❌</div></div>`;return;}
+  document.getElementById('auditMeta').textContent=`${d.total} events`;
+  if(!d.logs?.length){document.getElementById('auditTbl').innerHTML=`<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">No events.</div></div>`;document.getElementById('auditPager').innerHTML='';return;}
+  document.getElementById('auditTbl').innerHTML=`<table>
+    <thead><tr><th>TIMESTAMP (IST)</th><th>EVENT TYPE</th><th>ACTOR</th><th>TARGET</th><th>DETAILS</th></tr></thead>
+    <tbody>${d.logs.map(l=>`<tr>
+      <td style="font-family:'Space Mono',monospace;font-size:10px;white-space:nowrap;color:var(--muted)">${fmtD(l.timestamp)}</td>
+      <td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--cyan)">${l.event_type}</td>
+      <td style="font-size:11px">${l.actor}</td>
+      <td style="font-size:10px;color:var(--muted)">${l.target_type||'—'}</td>
+      <td style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title='${JSON.stringify(l.details||{})}'>${l.details?JSON.stringify(l.details).slice(0,110):'—'}</td>
+    </tr>`).join('')}</tbody></table>`;
+  buildPager('auditPager',pages.audit,d.total,PER,'loadAudit');
+}
+
+// ══════════════════════════════════════════════════
+// SCANNER ACTIONS
+// ══════════════════════════════════════════════════
+async function triggerCorpus(){toast('Starting corpus refresh...');const r=await apiPost('/api/scanner/pilot-refresh');r?toast('Corpus refresh queued — check Scan Jobs','success'):toast('Failed — is Docker running?','error');}
+async function triggerScanAll(){toast('Queuing pending domains...');const r=await apiPost('/api/scanner/scan-all-pending');if(r){toast('Batch scan queued!','success');}else toast('Failed — is Docker running?','error');}
+
+// ══════════════════════════════════════════════════
+// MODALS
+// ══════════════════════════════════════════════════
+function closeModal(id){document.getElementById(id).classList.add('hidden');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')['findingModal','domainModal','addModal'].forEach(closeModal);});
+
+// Init
+loadDashboard();
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────
+#  CyberDrishti — requirements.txt
+# ─────────────────────────────────────────
+
+# API Framework
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+
+# Database
+sqlalchemy==2.0.30
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Task Queue
+celery==5.4.0
+redis==5.0.4
+flower==2.0.1          # Celery monitoring UI
+
+# HTTP Scanning
+httpx==0.27.0
+aiohttp==3.9.5
+requests==2.32.3
+urllib3==2.2.1
+
+# HTML Parsing
+beautifulsoup4==4.12.3
+lxml==5.2.2
+
+# Data Validation
+pydantic==2.7.1
+pydantic-settings==2.2.1
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+cryptography==42.0.7
+
+# Utilities
+python-dotenv==1.0.1
+tenacity==8.3.0         # Retry logic
+tqdm==4.66.4            # Progress bars
+colorlog==6.8.2         # Coloured logging
+schedule==1.2.1
+
+# DNS
+dnspython==2.6.1
+
+# Date/Time
+python-dateutil==2.9.0.post0
