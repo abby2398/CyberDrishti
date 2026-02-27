@@ -591,8 +591,9 @@ def upsert_domain(db, domain: str, tld: str, ip: Optional[str],
         if iocs_score > (existing.iocs_score or 0):
             existing.iocs_score = iocs_score
             changed = True
-        # Update if vendor name changed (ignoring version bump — always store latest)
-            existing.vendor_fingerprint = vendor_str  # e.g. "WordPress 6.4.2"
+        # Always update vendor (captures version bumps like WordPress 6.4.2 -> 6.5.0)
+        if vendor_str and vendor_str != existing.vendor_fingerprint:
+            existing.vendor_fingerprint = vendor_str
             changed = True
         if content_hash and existing.baseline_hash != content_hash:
             existing.baseline_hash = content_hash

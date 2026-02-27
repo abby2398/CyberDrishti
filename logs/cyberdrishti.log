@@ -80,3 +80,8 @@
 (Background on this error at: https://sqlalche.me/e/20/e3q8)
 2026-02-26 16:39:59 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
 2026-02-26 16:39:59 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-27 00:01:48 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-27 00:01:48 UTC | INFO     | db.database                    | Database connection: OK
+2026-02-27 00:01:48 UTC | INFO     | api.main                       | DB migrations: all columns verified / applied
+2026-02-27 00:09:16 UTC | INFO     | api.main                       | CyberDrishti v1.0.0 starting up
+2026-02-27 00:09:16 UTC | INFO     | db.database                    | Database connection: OK

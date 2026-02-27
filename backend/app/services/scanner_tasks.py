@@ -688,13 +688,30 @@ SENSITIVE_PATHS = [
 # ─────────────────────────────────────────────────────────────
 
 PII_PATTERNS = [
-    # ── AADHAAR (Verhoeff validated) ──────────────────────────────────────
+    # ── AADHAAR (Verhoeff + strict context gate) ──────────────────────────
+    # Three gates ALL required to avoid false positives:
+    #   1. Verhoeff checksum must pass
+    #   2. Aadhaar-specific keyword must appear on same page
+    #   3. Number must NOT be inside a CSS/JS/HTML attribute context
     {
         "name": "AADHAAR", "entity": "AADHAAR", "severity": "CRITICAL",
-        "pattern": re.compile(r'\b([2-9]\d{3}[\s\-]?\d{4}[\s\-]?\d{4})\b'),
-        "context_keywords": ["aadhaar", "aadhar", "uid", "uidai", "unique id", "enrolment"],
-        "min_occurrences": 3,
-        "validator": "verhoeff",   # Extra: Verhoeff checksum applied per-match
+        # Matches exactly 12 digits in 4-4-4 groups (space/dash/nbsp) or plain 12,
+        # with no adjacent digit on either side (not part of a longer number)
+        "pattern": re.compile(
+            r'(?<!\d)'
+            r'([2-9]\d{3}'
+            r'(?:[\s\u00a0\-]\d{4}[\s\u00a0\-]\d{4}'
+            r'|\d{8}))'
+            r'(?!\d)'
+        ),
+        "context_keywords": [
+            "aadhaar", "aadhar", "uid no", "uid:", "uidai",
+            "unique identification", "enrolment no", "enrollment no",
+            "\u0906\u0927\u093e\u0930",  # आधार in Devanagari
+        ],
+        "min_occurrences": 1,
+        "validator": "verhoeff",
+        "require_keyword": True,   # Both keyword AND Verhoeff required (not OR)
     },
     # ── PAN Card ──────────────────────────────────────────────────────────
     {
@@ -901,13 +918,38 @@ def scan_sensitive_files(base_url: str, domain_id, db) -> int:
     return saved
 
 
+def _strip_noise_content(html: str) -> str:
+    """
+    Remove CSS rule blocks, <style> tags, <script> tags before PII scanning.
+    This prevents matching 12-digit-like numbers inside:
+      - CSS: width:33.333333333333%; elementor class values
+      - JS:  variable assignments, pixel tracking payloads
+    Keeps visible text content and label/value patterns intact.
+    """
+    # Remove <style> blocks entirely
+    s = re.sub(r'<style[^>]*>.*?</style>', ' ', html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove <script> blocks entirely
+    s = re.sub(r'<script[^>]*>.*?</script>', ' ', s, flags=re.DOTALL | re.IGNORECASE)
+    # Remove all HTML tags (keep text nodes only)
+    s = re.sub(r'<[^>]+>', ' ', s)
+    # Remove CSS decimal percentages and unit values (33.333333%, 0px, 2rem etc.)
+    s = re.sub(r'\d+\.\d+\s*%', ' ', s)
+    s = re.sub(r'\b\d+(?:px|rem|em|vh|vw|pt|cm|mm)\b', ' ', s)
+    return s
+
+
 def scan_pii_in_content(url: str, content: str, domain_id=None, db=None) -> int:
     """Scan page content for PII patterns. Saves immediately if domain_id+db provided. Returns count."""
     saved = 0
     cl = content.lower()
 
+    # Use text-only version for number pattern matching to strip CSS/JS/attr noise.
+    # Keyword matching still runs against the full lowercased content.
+    clean = _strip_noise_content(content)
+
     for rule in PII_PATTERNS:
-        raw_matches = list(rule["pattern"].finditer(content))
+        # Match against cleaned text for numeric patterns; keyword check on full content
+        raw_matches = list(rule["pattern"].finditer(clean))
         if not raw_matches:
             continue
 
@@ -932,8 +974,16 @@ def scan_pii_in_content(url: str, content: str, domain_id=None, db=None) -> int:
 
         has_kw = any(kw in cl for kw in rule.get("context_keywords", []))
         has_vol = len(matches) >= rule.get("min_occurrences", 1)
-        if not (has_kw or has_vol):
-            continue
+
+        # require_keyword=True means BOTH keyword AND checksum required.
+        # Prevents Verhoeff-passing random numbers firing without any context.
+        if rule.get("require_keyword"):
+            if not has_kw:
+                logger.debug(f"  {rule['name']}: {len(matches)} valid match(es) but no keyword — skipped")
+                continue
+        else:
+            if not (has_kw or has_vol):
+                continue
 
         first = matches[0].group(1) if matches[0].lastindex else matches[0].group(0)
         ctx = safe_context(content, matches[0].start(), 250)
@@ -1131,6 +1181,15 @@ def scan_domain(self, domain_id: str, job_type: str = "FULL_SCAN"):
         home = make_request(base_url)
         if home and home.text:
             new_count += scan_pii_in_content(base_url, home.text, domain.id, db)
+            # Keep vendor fingerprint fresh — update on every scan
+            from app.services.corpus_tasks import fingerprint_vendor, compute_content_hash
+            vendor_fp = fingerprint_vendor(home.text, dict(home.headers) if home else {})
+            if vendor_fp:
+                domain.vendor_fingerprint = vendor_fp["vendor"]
+            # Update content hash for differential scanning
+            new_hash = compute_content_hash(home.text)
+            if new_hash:
+                domain.baseline_hash = new_hash
 
         domain.last_scanned_at = datetime.now(timezone.utc)
         domain.scan_count = (domain.scan_count or 0) + 1

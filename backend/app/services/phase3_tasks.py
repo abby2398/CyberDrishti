@@ -398,8 +398,13 @@ def run_disclosure_workflow(dry_run: bool = True):
                                                     ack_token=domain_ack_token)
             ok = _send_email(contact_email, subject, body, cc=cc_list, dry_run=dry_run)
 
+            # ack_token goes on the first finding's PRIMARY event only.
+            # UNIQUE constraint means subsequent events for the same domain
+            # batch must use NULL tokens (they don't need ack functionality).
+            first_finding = True
             for f in findings:
-                ack_token = domain_ack_token if ok else None
+                ack_token = (domain_ack_token if ok and first_finding else None)
+                first_finding = False
                 db.add(DisclosureEvent(finding_id=f.id, recipient_email=contact_email,
                     recipient_type="PRIMARY", subject=subject, sent_at=now,
                     send_status="SENT" if ok else "FAILED",

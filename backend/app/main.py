@@ -48,6 +48,62 @@ app.add_middleware(
 async def startup():
     logger.info(f"CyberDrishti v{settings.VERSION} starting up")
     check_db_connection()
+    _run_migrations()
+
+
+def _run_migrations():
+    """
+    Safe, idempotent schema migrations.
+    Adds any columns/indexes that exist in the model but may be missing
+    from databases created before those columns were introduced.
+    Each ALTER is wrapped in a DO block so it silently skips if already present.
+    """
+    migrations = [
+        # Phase 3 ack webhook columns (added in v3)
+        """
+        DO $$ BEGIN
+            ALTER TABLE disclosure_events ADD COLUMN ack_token VARCHAR(64) UNIQUE;
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+        """,
+        """
+        DO $$ BEGIN
+            ALTER TABLE disclosure_events ADD COLUMN acknowledged_at TIMESTAMPTZ;
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+        """,
+        # Index on ack_token (safe to re-run — CREATE INDEX IF NOT EXISTS)
+        """
+        CREATE INDEX IF NOT EXISTS idx_disclosure_ack_token
+            ON disclosure_events(ack_token);
+        """,
+        # acknowledged_at on findings table (Phase 3)
+        """
+        DO $$ BEGIN
+            ALTER TABLE findings ADD COLUMN acknowledged_at TIMESTAMPTZ;
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+        """,
+        # vendor_fingerprint on domains (may be missing on very old DBs)
+        """
+        DO $$ BEGIN
+            ALTER TABLE domains ADD COLUMN vendor_fingerprint VARCHAR(200);
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+        """,
+        # contact_email on domains
+        """
+        DO $$ BEGIN
+            ALTER TABLE domains ADD COLUMN contact_email VARCHAR(255);
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+        """,
+    ]
+
+    from sqlalchemy import text as sa_text
+    from app.db.database import engine
+    try:
+        with engine.begin() as conn:
+            for sql in migrations:
+                conn.execute(sa_text(sql))
+        logger.info("DB migrations: all columns verified / applied")
+    except Exception as e:
+        logger.error(f"DB migration error: {e}")
 
 
 # ── Health ────────────────────────────────────────────────────
@@ -220,16 +276,22 @@ def add_domain(domain: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/domains/re-fingerprint-all", tags=["Domains"])
-def re_fingerprint_all_domains(db: Session = Depends(get_db)):
-    """Queue vendor re-fingerprinting for all ACTIVE domains with no vendor set."""
+def re_fingerprint_all_domains(force: bool = False, db: Session = Depends(get_db)):
+    """
+    Queue vendor re-fingerprinting for ACTIVE domains.
+    force=False (default): only queue domains with no vendor set.
+    force=True: re-fingerprint ALL active domains (refreshes version strings).
+    """
     from app.services.corpus_tasks import enrich_domain_fingerprint
-    domains = db.query(Domain).filter(Domain.status == "ACTIVE").all()
+    query = db.query(Domain).filter(Domain.status == "ACTIVE")
+    if not force:
+        query = query.filter(Domain.vendor_fingerprint == None)  # noqa: E711
+    domains = query.all()
     queued = 0
     for d in domains:
-        if not d.vendor_fingerprint:
-            enrich_domain_fingerprint.delay(str(d.id))
-            queued += 1
-    return {"queued": queued, "message": f"Re-fingerprinting {queued} domains"}
+        enrich_domain_fingerprint.delay(str(d.id))
+        queued += 1
+    return {"queued": queued, "force": force, "message": f"Re-fingerprinting {queued} domains"}
 
 
 @app.get("/api/domains/{domain_id}", tags=["Domains"])

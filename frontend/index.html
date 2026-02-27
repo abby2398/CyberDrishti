@@ -190,7 +190,9 @@ tr.clickable{cursor:pointer;}tr.clickable:hover td{background:rgba(0,200,212,.04
     <div class="nav-item" data-page="jobs"     onclick="nav(this)"><span class="nav-icon">⚙️</span>Scan Jobs</div>
     <div class="nav-item" data-page="audit"    onclick="nav(this)"><span class="nav-icon">📋</span>Audit Log</div>
     <div class="nav-label">SCANNER</div>
-    <div class="nav-item" onclick="triggerCorpus()"><span class="nav-icon">📡</span>Refresh Corpus</div>
+    <div class="nav-item" onclick="triggerCorpus()"><span class="nav-icon">📡</span>Refresh Corpus (P1)</div>
+    <div class="nav-item" onclick="triggerPhase2Refresh()"><span class="nav-icon">🌏</span>Refresh Corpus (P2)</div>
+    <div class="nav-item" onclick="triggerRescanQueue()"><span class="nav-icon">♻️</span>Queue Rescans</div>
     <div class="nav-item" onclick="triggerScanAll()"><span class="nav-icon">🔍</span>Scan Pending</div>
     <div class="nav-label">DISCLOSURE</div>
     <div class="nav-item" data-page="phase3" onclick="nav(this)"><span class="nav-icon">📨</span>Phase 3 — Disclose</div>
@@ -760,7 +762,7 @@ async function loadDomains(p){
       <td>${mono(dm.ip_address||'—')}</td>
       <td onclick="event.stopPropagation()">${dm.contact_email
         ? `<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--green)">${dm.contact_email}</span>`
-        : `<button class="btn btn-ghost btn-sm" data-did="${dm.id}" data-dname="${dm.domain}" data-email="" onclick="openContactEditFromBtn(this)">+ Set Email</button>`
+: `<span style="display:inline-flex;gap:4px"><button class="btn btn-ghost btn-sm" data-did="${dm.id}" data-dname="${dm.domain}" data-email="" onclick="openContactEditFromBtn(this)">+ Set</button><button class="btn btn-ghost btn-sm" onclick="lookupContact('${dm.id}','${dm.domain}')">🔍</button></span>`
       }</td>
       <td>${mono(fmtD(dm.last_scanned_at))}</td>
       <td style="text-align:center">${dm.scan_count||0}</td>
@@ -799,6 +801,7 @@ async function openDomain(id){
     <div class="dbox"><div class="dlabel">SECURITY CONTACT</div><div class="dval" style="display:flex;align-items:center;gap:6px">
       <span style="font-family:'Space Mono',monospace;font-size:11px;color:${d.contact_email?'var(--green)':'var(--muted)'}">${d.contact_email||'Not set'}</span>
       <button class="btn btn-ghost btn-sm" data-did="${d.id}" data-dname="${d.domain}" data-email="${d.contact_email||''}" onclick="openContactEditFromBtn(this)">✏ Edit</button>
+      <button class="btn btn-ghost btn-sm" onclick="lookupContact('${d.id}','${d.domain}')" title="Auto-detect via security.txt">🔍 Auto-detect</button>
     </div></div>
     <div class="dbox"><div class="dlabel">SCAN COUNT</div><div class="dval">${d.scan_count||0}</div></div>
     <div class="dbox"><div class="dlabel">LAST SCANNED</div><div class="dval" style="font-size:11px">${fmtD(d.last_scanned_at)}</div></div>
@@ -1037,15 +1040,8 @@ async function loadJobs(p){
   buildPager('jobPager',pages.jobs,d.total,PER,'loadJobs');
 }
 
-async function rescanJob(jobId, domain){
-  toast(`Re-queuing scan for ${domain}...`);
-  try{
-    const r=await fetch(`${API}/api/jobs/${jobId}/retry`,{method:'POST'});
-    const d=await r.json();
-    if(r.ok){toast(`Retry queued: ${domain}`,'success');setTimeout(loadJobs,800);}
-    else toast(`Retry failed: ${d.detail||'error'}`,'error');
-  }catch(e){toast('API unreachable','error');}
-}
+// rescanJob is an alias for retryJob
+async function rescanJob(jobId, domain){ return retryJob(jobId, domain); }
 
 // ══════════════════════════════════════════════════
 // AUDIT
@@ -1076,7 +1072,18 @@ async function loadAudit(p){
 // ══════════════════════════════════════════════════
 // SCANNER ACTIONS
 // ══════════════════════════════════════════════════
-async function triggerCorpus(){toast('Starting corpus refresh...');const r=await apiPost('/api/scanner/pilot-refresh');r?toast('Corpus refresh queued — check Scan Jobs','success'):toast('Failed — is Docker running?','error');}
+async function triggerCorpus(){toast('Starting Phase 1 corpus refresh (gov/edu/nic)...');const r=await apiPost('/api/scanner/pilot-refresh');r?toast('Phase 1 refresh queued — check Scan Jobs','success'):toast('Failed — is Docker running?','error');}
+async function triggerPhase2Refresh(){
+  if(!confirm('Phase 2 refresh scans ALL Indian TLDs and may take 10-30 minutes. Continue?')) return;
+  toast('Starting Phase 2 full corpus refresh...','info');
+  const r=await apiPost('/api/scanner/phase2-refresh');
+  r?toast('Phase 2 refresh queued — check Scan Jobs for progress','success'):toast('Failed — is Docker running?','error');
+}
+async function triggerRescanQueue(){
+  toast('Queuing domains due for rescan...','info');
+  const r=await apiPost('/api/scanner/trigger-rescan-queue');
+  r?toast(`Rescan queue triggered: ${r.queued||0} queued, ${r.skipped_ttl||0} skipped (TTL not reached)`,'success'):toast('Failed','error');
+}
 async function triggerScanAll(){toast('Queuing pending domains...');const r=await apiPost('/api/scanner/scan-all-pending');if(r){toast('Batch scan queued!','success');}else toast('Failed — is Docker running?','error');}
 
 // ══════════════════════════════════════════════════
@@ -1223,13 +1230,32 @@ async function submitContactEmail(){
   }
 }
 
-// security.txt auto-discover removed from UI — manual entry only
+// ── Auto-discover security contact via security.txt ──────────
+async function lookupContact(domainId, domainName){
+  toast(`Looking up security contact for ${domainName}...`, 'info');
+  try{
+    const r = await fetch(API+`/api/domains/${domainId}/lookup-contact`, {method:'POST'});
+    const d = await r.json();
+    if(r.ok){
+      if(d.contact_email){
+        toast(`Found: ${d.contact_email} (via ${d.source})`, 'success');
+        // Refresh domain modal to show new email
+        setTimeout(()=>openDomain(domainId), 500);
+      } else {
+        toast(`No contact found for ${domainName} — try manual entry`, 'warn');
+      }
+    } else {
+      toast(d.detail||'Lookup failed','error');
+    }
+  } catch(e){ toast('Network error','error'); }
+}
 
 
 // ── Vendor re-fingerprinting ──────────────────────────────
 async function reFingerprintAll(){
-  toast('Queuing re-fingerprint for domains with no vendor...','info');
-  const r = await apiPost('/api/domains/re-fingerprint-all');
+  const force = confirm('Re-fingerprint ALL active domains?\n\nOK = all domains (refresh version strings)\nCancel = only domains missing vendor detection');
+  toast(`Queuing re-fingerprint (${force?'all':'missing only'})...`,'info');
+  const r = await apiPost(`/api/domains/re-fingerprint-all${force?'?force=true':''}`);
   if(r) toast(`Queued ${r.queued} domains for re-fingerprinting`,'success');
   else toast('Failed','error');
 }
