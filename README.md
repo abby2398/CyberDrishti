@@ -1,7 +1,8 @@
 # CyberDrishti — Setup Guide
 ### CERT-IN National Cyber Exposure Scanner | साइबर दृष्टि
 
----
+-![Uploading Screenshot_1.jpg…]()
+--
 
 ## What You Have (Phase 0 — Foundation)
 
